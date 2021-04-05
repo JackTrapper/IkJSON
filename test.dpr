@@ -3,7 +3,7 @@
 //
 // Leon, 27/03/2007
 
-{$define usefastmm}
+{.$define usefastmm}
 
 program test;
 
@@ -23,6 +23,9 @@ var
   i,j,k,l: Integer;
   ws: String;
 begin
+{$ifdef USE_D2009}
+  ReportMemoryLeaksOnShutdown := True;
+{$endif}
   Randomize;
   js := TlkJSONobject.Create(true);
 //  js.HashTable.HashOf := js.HashTable.SimpleHashOf;
