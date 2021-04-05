@@ -1,7 +1,7 @@
 {
-  LkJSON v0.98
+  LkJSON v0.99
 
-  09 may 2007
+  10 may 2007
 
   Copyright (C) 2006,2007 Leonid Koninin
   leon_kon@users.sourceforge.net
@@ -22,6 +22,23 @@
 
   changes:
 
+  v0.99 10/05/2007 + add functions to list and object:
+                      function getInt(idx: Integer): Integer;
+                      function getString(idx: Integer): String;
+                      function getWideString(idx: Integer):WideString;
+                      function getDouble(idx: Integer): Double;
+                      function getBoolean(idx: Integer): Boolean;
+                   + add overloaded functions to object:
+                      function getDouble(nm: String): Double; overload;
+                      function getInt(nm: String): Integer; overload;
+                      function getString(nm: String): String; overload;
+                      function getWideString(nm: String): WideString; overload;
+                      function getBoolean(nm: String): Boolean; overload;
+                   * changed storing mech of TlkJSONcustomlist descendants from
+                     dynamic array to TList; this gives us great speedup with
+                     lesser changes; thanx for idea to Henri Gourvest
+                   * also reworked hashtable to work with TList, so it also
+                     increase speed of work
   v0.98 09/05/2007 * fix small bug in work with WideStrings(UTF8), thanx to
                      IVO GELOV to description and sources
   v0.97 10/04/2007 + add capabilities to work with KOL delphi projects; for
@@ -161,13 +178,15 @@ type
 
   TlkJSONcustomlist = class(TlkJSONbase)
   protected
-    FValue: array of TlkJSONbase;
+//    FValue: array of TlkJSONbase;
+    fList:TList;
     function GetCount: Integer; override;
     function GetChild(idx: Integer): TlkJSONbase; override;
     procedure SetChild(idx: Integer; const Value: TlkJSONbase);
       override;
     function ForEachElement(idx: Integer; var nm: string):
       TlkJSONbase; virtual;
+
     function _Add(obj: TlkJSONbase): Integer; virtual;
     procedure _Delete(idx: Integer); virtual;
     function _IndexOf(obj: TlkJSONbase): Integer; virtual;
@@ -175,6 +194,12 @@ type
     procedure ForEach(cb: TlkJSONFuncEnum; data: pointer);
     procedure AfterConstruction; override;
     procedure BeforeDestruction; override;
+
+    function getInt(idx: Integer): Integer; virtual;
+    function getString(idx: Integer): String; virtual;
+    function getWideString(idx: Integer):WideString; virtual;
+    function getDouble(idx: Integer): Double; virtual;
+    function getBoolean(idx: Integer): Boolean; virtual;
   end;
 
   TlkJSONlist = class(TlkJSONcustomlist)
@@ -208,6 +233,7 @@ type
       TlkJSONobjectmethod;
   end;
 
+  PlkHashItem = ^TlkHashItem;
   TlkHashItem = packed record
     hash: cardinal;
     index: Integer;
@@ -220,7 +246,8 @@ type
     FHashFunction: TlkHashFunction;
     procedure SetHashFunction(const Value: TlkHashFunction);
   protected
-    a_h: array[0..255] of array of TlkHashItem;
+//    a_h: array[0..255] of array of TlkHashItem;
+    a_x: array[0..255] of TList;
     procedure hswap(j, k, l: Integer);
     function InTable(ws: WideString; var i, j, k: cardinal): Boolean;
   public
@@ -242,15 +269,14 @@ type
   end;
 
   TlkJSONobject = class(TlkJSONcustomlist)
-  private
+  protected
+    ht: TlkHashTable;
     FUseHash: Boolean;
     function GetFieldByIndex(idx: Integer): TlkJSONbase;
     function GetNameOf(idx: Integer): WideString;
     procedure SetFieldByIndex(idx: Integer; const Value:
       TlkJSONbase);
     function GetHashTable: TlkHashTable;
-  protected
-    ht: TlkHashTable;
     function ForEachElement(idx: Integer; var nm: string):
       TlkJSONbase;
       override;
@@ -275,8 +301,7 @@ type
     procedure Delete(idx: Integer);
     function IndexOfName(aname: WideString): Integer;
     function IndexOfObject(aobj: TlkJSONbase): Integer;
-    property Field[nm: string]: TlkJSONbase read GetField write
-    SetField;
+    property Field[nm: string]: TlkJSONbase read GetField write SetField;
 
     constructor Create(bUseHash: Boolean = true);
     destructor Destroy; override;
@@ -285,9 +310,20 @@ type
     function SelfType: TlkJSONtypes; override;
     function SelfTypeName: string; override;
 
-    property FieldByIndex[idx: Integer]: TlkJSONbase read
-    GetFieldByIndex write SetFieldByIndex;
+    property FieldByIndex[idx: Integer]: TlkJSONbase read GetFieldByIndex write SetFieldByIndex;
     property NameOf[idx: Integer]: WideString read GetNameOf;
+
+    function getDouble(idx: Integer): Double; overload; override;
+    function getInt(idx: Integer): Integer; overload; override;
+    function getString(idx: Integer): String; overload; override;
+    function getWideString(idx: Integer): WideString; overload; override;
+    function getBoolean(idx: Integer): Boolean; overload; override;
+
+    function getDouble(nm: String): Double; overload;
+    function getInt(nm: String): Integer; overload;
+    function getString(nm: String): String; overload;
+    function getWideString(nm: String): WideString; overload;
+    function getBoolean(nm: String): Boolean; overload;
   end;
 
   TlkJSON = class
@@ -500,27 +536,30 @@ begin
       result := -1;
       exit;
     end;
-  result := Count;
-  SetLength(FValue, Result + 1);
-  FValue[Result] := obj;
+//  result := Count;
+//  SetLength(FValue, Result + 1);
+//  FValue[Result] := obj;
+  result := fList.Add(obj);
 end;
 
 procedure TlkJSONcustomlist.AfterConstruction;
 begin
   inherited;
-  SetLength(FValue, 0);
+//  SetLength(FValue, 0);
+  fList := TList.Create;
 end;
 
 procedure TlkJSONcustomlist.BeforeDestruction;
 var
   i: Integer;
 begin
-  for i := 0 to Count - 1 do
-    begin
-      if FValue[i] <> nil then FValue[i].Free;
-      FValue[i] := nil;
-    end;
-  SetLength(FValue, 0);
+  for i := 0 to Count - 1 do _Delete(0);
+//    begin
+//      if FValue[i] <> nil then FValue[i].Free;
+//      FValue[i] := nil;
+//    end;
+//  SetLength(FValue, 0);
+  fList.Free;
   inherited;
 end;
 
@@ -528,13 +567,15 @@ procedure TlkJSONcustomlist._Delete(idx: Integer);
 begin
   if not ((idx < 0) or (idx >= Count)) then
     begin
-      if FValue[idx] <> nil then FValue[idx].Free;
-      while idx < (Count - 1) do
-        begin
-          FValue[idx] := FValue[idx + 1];
-          inc(idx);
-        end;
-      SetLength(FValue, idx);
+//      if FValue[idx] <> nil then FValue[idx].Free;
+//      while idx < (Count - 1) do
+//        begin
+//          FValue[idx] := FValue[idx + 1];
+//          inc(idx);
+//        end;
+//      SetLength(FValue, idx);
+      if fList.Items[idx]<>nil then TlkJSONbase(fList.Items[idx]).Free;
+      fList.Delete(idx);
     end;
 end;
 
@@ -546,26 +587,29 @@ begin
     end
   else
     begin
-      result := FValue[idx];
+//      result := FValue[idx];
+      result := fList.Items[idx];
     end;
 end;
 
 function TlkJSONcustomlist.GetCount: Integer;
 begin
-  result := length(FValue);
+//  result := length(FValue);
+  result := fList.Count;
 end;
 
 function TlkJSONcustomlist._IndexOf(obj: TlkJSONbase): Integer;
 var
   i: Integer;
 begin
-  result := -1;
-  for i := 0 to count - 1 do
-    if FValue[i] = obj then
-      begin
-        result := i;
-        break;
-      end;
+//  result := -1;
+//  for i := 0 to count - 1 do
+//    if FValue[i] = obj then
+//      begin
+//        result := i;
+//        break;
+//      end;
+  result := fList.IndexOf(obj);
 end;
 
 procedure TlkJSONcustomlist.SetChild(idx: Integer; const Value:
@@ -573,8 +617,10 @@ procedure TlkJSONcustomlist.SetChild(idx: Integer; const Value:
 begin
   if not ((idx < 0) or (idx >= Count)) then
     begin
-      if FValue[idx] <> nil then FValue[idx].Free;
-      FValue[idx] := Value;
+//      if FValue[idx] <> nil then FValue[idx].Free;
+//      FValue[idx] := Value;
+      if fList.Items[idx]<>nil then TlkJSONbase(fList.Items[idx]).Free;
+      fList.Items[idx] := Value;
     end;
 end;
 
@@ -601,6 +647,51 @@ function TlkJSONcustomlist.ForEachElement(idx: Integer; var nm:
 begin
   nm := inttostr(idx);
   result := GetChild(idx);
+end;
+
+function TlkJSONcustomlist.getDouble(idx: Integer): Double;
+var
+  jn:TlkJSONnumber;
+begin
+  jn := Child[idx] as TlkJSONnumber;
+  if not assigned(jn) then result := 0
+  else result := jn.Value;
+end;
+
+function TlkJSONcustomlist.getInt(idx: Integer): Integer;
+var
+  jn:TlkJSONnumber;
+begin
+  jn := Child[idx] as TlkJSONnumber;
+  if not assigned(jn) then result := 0
+  else result := round(int(jn.Value));
+end;
+
+function TlkJSONcustomlist.getString(idx: Integer): String;
+var
+  js:TlkJSONstring;
+begin
+  js := Child[idx] as TlkJSONstring;
+  if not assigned(js) then result := ''
+  else result := VarToStr(js.Value);
+end;
+
+function TlkJSONcustomlist.getWideString(idx: Integer): WideString;
+var
+  js:TlkJSONstring;
+begin
+  js := Child[idx] as TlkJSONstring;
+  if not assigned(js) then result := ''
+  else result := VarToWideStr(js.Value);
+end;
+
+function TlkJSONcustomlist.getBoolean(idx: Integer): Boolean;
+var
+  jb:TlkJSONboolean;
+begin
+  jb := Child[idx] as TlkJSONboolean;
+  if not assigned(jb) then result := false
+  else result := jb.Value;
 end;
 
 { TlkJSONobjectmethod }
@@ -716,9 +807,10 @@ procedure TlkJSONobject.Delete(idx: Integer);
 var
   mth: TlkJSONobjectmethod;
 begin
-  if (idx >= 0) and (idx <= high(FValue)) then
+  if (idx >= 0) and (idx < Count) then
     begin
-      mth := FValue[idx] as TlkJSONobjectmethod;
+//      mth := FValue[idx] as TlkJSONobjectmethod;
+      mth := TlkJSONobjectmethod(fList.Items[idx]);
       if FUseHash then ht.Delete(mth.FName);
     end;
   _Delete(idx);
@@ -742,7 +834,8 @@ begin
     end
   else
     begin
-      mth := TlkJSONobjectmethod(FValue[i]);
+//      mth := TlkJSONobjectmethod(FValue[i]);
+      mth := TlkJSONobjectmethod(fList.Items[i]);
       result := mth.FValue;
     end;
 end;
@@ -757,7 +850,8 @@ begin
       result := -1;
       for i := 0 to Count - 1 do
         begin
-          mth := TlkJSONobjectmethod(FValue[i]);
+//          mth := TlkJSONobjectmethod(FValue[i]);
+          mth := TlkJSONobjectmethod(fList.Items[i]);
           if mth.Name = aname then
             begin
               result := i;
@@ -779,7 +873,8 @@ begin
   result := -1;
   for i := 0 to Count - 1 do
     begin
-      mth := TlkJSONobjectmethod(FValue[i]);
+//      mth := TlkJSONobjectmethod(FValue[i]);
+      mth := TlkJSONobjectmethod(fList.Items[i]);
       if mth.FValue = aobj then
         begin
           result := i;
@@ -797,7 +892,8 @@ begin
   i := IndexOfName(nm);
   if i <> -1 then
     begin
-      mth := TlkJSONobjectmethod(FValue[i]);
+//      mth := TlkJSONobjectmethod(FValue[i]);
+      mth := TlkJSONobjectmethod(fList.Items[i]);
       mth.FValue := Value;
     end;
 end;
@@ -904,6 +1000,76 @@ destructor TlkJSONobject.Destroy;
 begin
   if assigned(ht) then FreeAndNil(ht);
   inherited;
+end;
+
+function TlkJSONobject.getDouble(idx: Integer): Double;
+var
+  jn:TlkJSONnumber;
+begin
+  jn := FieldByIndex[idx] as TlkJSONnumber;
+  if not assigned(jn) then result := 0
+  else result := jn.Value;
+end;
+
+function TlkJSONobject.getInt(idx: Integer): Integer;
+var
+  jn:TlkJSONnumber;
+begin
+  jn := FieldByIndex[idx] as TlkJSONnumber;
+  if not assigned(jn) then result := 0
+  else result := round(int(jn.Value));
+end;
+
+function TlkJSONobject.getString(idx: Integer): String;
+var
+  js:TlkJSONstring;
+begin
+  js := FieldByIndex[idx] as TlkJSONstring;
+  if not assigned(js) then result := ''
+  else result := vartostr(js.Value);
+end;
+
+function TlkJSONobject.getWideString(idx: Integer): WideString;
+var
+  js:TlkJSONstring;
+begin
+  js := FieldByIndex[idx] as TlkJSONstring;
+  if not assigned(js) then result := ''
+  else result := VarToWideStr(js.Value);
+end;
+
+function TlkJSONobject.getDouble(nm: String): Double;
+begin
+  result := getDouble(IndexOfName(nm));
+end;
+
+function TlkJSONobject.getInt(nm: String): Integer;
+begin
+  result := getInt(IndexOfName(nm));
+end;
+
+function TlkJSONobject.getString(nm: String): String;
+begin
+  result := getString(IndexOfName(nm));
+end;
+
+function TlkJSONobject.getWideString(nm: String): WideString;
+begin
+  result := getWideString(IndexOfName(nm));
+end;
+
+function TlkJSONobject.getBoolean(idx: Integer): Boolean;
+var
+  jb:TlkJSONboolean;
+begin
+  jb := FieldByIndex[idx] as TlkJSONboolean;
+  if not assigned(jb) then result := false
+  else result := jb.Value;
+end;
+
+function TlkJSONobject.getBoolean(nm: String): Boolean;
+begin
+  result := getBoolean(IndexOfName(nm));
 end;
 
 { TlkJSON }
@@ -1347,22 +1513,35 @@ end;
 procedure TlkHashTable.AddPair(ws: WideString; idx: Integer);
 var
   i, j, k: cardinal;
+  p,p2: PlkHashItem;
 begin
   if InTable(ws, i, j, k) then
     begin
 // if string is already in table, changing index
-      a_h[j, k].index := idx;
+//      a_h[j, k].index := idx;
+      PlkHashItem(a_x[j].Items[k])^.index := idx;
     end
   else
     begin
-      k := length(a_h[j]);
-      SetLength(a_h[j], k + 1);
-      a_h[j, k].hash := i;
-      a_h[j, k].index := idx;
-// sorting array of hashes
-      while (k > 0) and (a_h[j, k].hash < a_h[j, k - 1].hash) do
+//      k := length(a_h[j]);
+//      SetLength(a_h[j], k + 1);
+//      a_h[j, k].hash := i;
+//      a_h[j, k].index := idx;
+//// sorting array of hashes
+//      while (k > 0) and (a_h[j, k].hash < a_h[j, k - 1].hash) do
+//        begin
+//          hswap(j, k, k - 1);
+//          dec(k);
+//        end;
+//--- new version
+      GetMem(p,sizeof(TlkHashItem));
+      k := a_x[j].Add(p);
+      p^.hash := i;
+      p^.index := idx;
+      while (k>0) and (PlkHashItem(a_x[j].Items[k])^.hash <
+        PlkHashItem(a_x[j].Items[k-1])^.hash) do
         begin
-          hswap(j, k, k - 1);
+          a_x[j].Exchange(k,k-1);
           dec(k);
         end;
     end;
@@ -1377,7 +1556,8 @@ begin
   for i := 0 to 15 do
     begin
       for j := 0 to 15 do
-        ws := ws + format('%.3d ', [length(a_h[i * 16 + j])]);
+//        ws := ws + format('%.3d ', [length(a_h[i * 16 + j])]);
+        ws := ws + format('%.3d ', [a_x[i * 16 + j].Count]);
       ws := ws + #13#10;
     end;
   result := ws;
@@ -1389,12 +1569,14 @@ var
 begin
   if InTable(ws, i, j, k) then
     begin
-      while k < high(a_h[j]) do
-        begin
-          hswap(j, k, k + 1);
-          inc(k);
-        end;
-      SetLength(a_h[j], k);
+//      while k < high(a_h[j]) do
+//        begin
+//          hswap(j, k, k + 1);
+//          inc(k);
+//        end;
+//      SetLength(a_h[j], k);
+      FreeMem(a_x[j].Items[k]);
+      a_x[j].Delete(k);
     end;
 end;
 
@@ -1426,9 +1608,10 @@ procedure TlkHashTable.hswap(j, k, l: Integer);
 var
   h: TlkHashItem;
 begin
-  h := a_h[j, k];
-  a_h[j, k] := a_h[j, l];
-  a_h[j, l] := h;
+//  h := a_h[j, k];
+//  a_h[j, k] := a_h[j, l];
+//  a_h[j, l] := h;
+  a_x[j].Exchange(k,l);
 end;
 
 function TlkHashTable.IndexOf(ws: WideString): Integer;
@@ -1441,7 +1624,8 @@ begin
     end
   else
     begin
-      result := a_h[j, k].index;
+//      result := a_h[j, k].index;
+      result := PlkHashItem(a_x[j].Items[k])^.index;
     end;
 end;
 
@@ -1455,11 +1639,19 @@ begin
   i := HashOf(ws);
   j := i and $FF;
   result := false;
-  if length(a_h[j]) < 25 then
+//  if length(a_h[j]) < 25 then
+  if a_x[j].Count < 25 then
     begin
-// for small array use linear search
-      for l := 0 to high(a_h[j]) do
-        if a_h[j, l].hash = i then
+//// for small array use linear search
+//      for l := 0 to high(a_h[j]) do
+//        if a_h[j, l].hash = i then
+//          begin
+//            k := l;
+//            result := true;
+//            break;
+//          end;
+      for l := 0 to a_x[j].Count-1 do
+        if PlkHashItem(a_x[j].Items[l])^.hash = i then
           begin
             k := l;
             result := true;
@@ -1469,16 +1661,18 @@ begin
   else
     begin
 // for larger array use "binary" search, becouse array is sorted
-      wl := low(a_h[j]);
-      wu := high(a_h[j]);
+//      wl := low(a_h[j]);
+//      wu := high(a_h[j]);
+      wl := 0;
+      wu := a_x[j].Count-1;
       repeat
         fin := true;
-        if a_h[j, wl].hash = i then
+        if PlkHashItem(a_x[j].Items[wl])^.hash = i then
           begin
             k := wl;
             result := true;
           end
-        else if a_h[j, wu].hash = i then
+        else if PlkHashItem(a_x[j].Items[wu])^.hash = i then
           begin
             k := wu;
             result := true;
@@ -1487,7 +1681,7 @@ begin
           begin
             fin := false;
             x := (wl + wu) shr 1;
-            if a_h[j, x].hash > i then
+            if PlkHashItem(a_x[j].Items[x])^.hash > i then
               begin
                 wu := x;
               end
@@ -1523,15 +1717,21 @@ var
   i: Integer;
 begin
   inherited;
-  for i := 0 to 255 do SetLength(a_h[i], 0);
+//  for i := 0 to 255 do SetLength(a_h[i], 0);
+  for i := 0 to 255 do a_x[i] := TList.Create;
   HashOf := DefaultHashOf;
 end;
 
 destructor TlkHashTable.Destroy;
 var
-  i: Integer;
+  i,j: Integer;
 begin
-  for i := 0 to 255 do SetLength(a_h[i], 0);
+//  for i := 0 to 255 do SetLength(a_h[i], 0);
+  for i := 0 to 255 do
+    begin
+      for j := 0 to a_x[i].Count-1 do Freemem(a_x[i].Items[j]);
+      a_x[i].Free;
+    end;
   inherited;
 end;
 

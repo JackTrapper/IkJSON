@@ -18,7 +18,8 @@ var
   i: Integer;
 begin
   js := TlkJSONobject.Create;
-  js.add('namestring', TlkJSONstring.Generate('namevalue'));
+//  js.add('namestring', TlkJSONstring.Generate('namevalue'));
+  js.Add('namestring','namevalue');
 // get the text of object
   s := TlkJSON.GenerateText(js);
   writeln(s);
@@ -26,9 +27,12 @@ begin
 // restore object (parse text)
   js := TlkJSON.ParseText(s) as TlkJSONobject;
 // and get string back
+// old syntax
   ws := js.Field['namestring'] as TlkJSONstring;
   s := ws.Value;
-
+  writeln(s);
+// syntax of 0.99+
+  s := js.getString('namestring');
   writeln(s);
 
   readln;

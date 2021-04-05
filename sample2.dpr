@@ -56,6 +56,9 @@ begin
   writeln(ws.value);
   ws := xs.Field['objstr2'] as TlkJSONstring;
   writeln(ws.value);
+// new v0.99+ syntax!
+  writeln(xs.getString('objstr1'));
+  writeln(xs.getString('objstr2'));
 //
   readln;
   js.Free;
