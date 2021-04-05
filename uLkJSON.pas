@@ -1,9 +1,9 @@
 {
-  LkJSON v0.93
+  LkJSON v0.94
 
-  05 march 2007
+  27 march 2007
 
-  Copyright (C) 2006 Leonid Koninin
+  Copyright (C) 2006,2007 Leonid Koninin
   leon_kon@users.sourceforge.net
 
   This library is free software; you can redistribute it and/or
@@ -21,6 +21,10 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
   changes:
+
+  v0.94 27/03/2007 + add properties NameOf and FieldByIndex to TlkJSONobject
+                   * fix small error in parsing unicode chars
+                   * small changes in hashing code (try to speed up)
 
   v0.93 03/05/2007 + add overloaded functions to list and object
                    + add enum type TlkJSONtypes
@@ -50,20 +54,7 @@ type
     function GetValue: variant; virtual;
     procedure SetValue(const Value: variant); virtual;
     function GetChild(idx: Integer): TlkJSONbase; virtual;
-    procedure SetChild(idx: Integer; const Value: TlkJSONbase);
-      virtual;
-{*
- * @name          GetCount
- * @descr         get counter of child objects
- * @result        function result: Integer
- * @author        Leon
- * @version       23.10.2006
- *
- * Revision history:
- *
- * Date        Sign                Description
- * 23.10.2006  Leon
- *}
+    procedure SetChild(idx: Integer; const Value: TlkJSONbase); virtual;
     function GetCount: Integer; virtual;
   public
     property Count: Integer read GetCount;
@@ -190,6 +181,10 @@ type
   end;
 
   TlkJSONobject = class(TlkJSONcustomlist)
+  private
+    function GetFieldByIndex(idx: Integer): TlkJSONbase;
+    function GetNameOf(idx: Integer): WideString;
+    procedure SetFieldByIndex(idx: Integer; const Value: TlkJSONbase);
   public
     ht: TlkHashTable;
     function GetField(nm: string): TlkJSONbase;
@@ -212,6 +207,9 @@ type
     class function Generate: TlkJSONobject;
     function SelfType: TlkJSONtypes; override;
     function SelfTypeName: String; override;
+
+    property FieldByIndex[idx: Integer]:TlkJSONbase read GetFieldByIndex write SetFieldByIndex;
+    property NameOf[idx: Integer]:WideString read GetNameOf;
   end;
 
   TlkJSON = class
@@ -722,6 +720,48 @@ begin
   Result := 'jsObject';
 end;
 
+function TlkJSONobject.GetFieldByIndex(idx: Integer): TlkJSONbase;
+var
+  nm:WideString;
+begin
+  nm := GetNameOf(idx);
+  if nm<>'' then
+    begin
+      result := Field[nm];
+    end
+  else
+    begin
+      result := nil;
+    end;
+end;
+
+function TlkJSONobject.GetNameOf(idx: Integer): WideString;
+var
+  mth:TlkJSONobjectmethod;
+begin
+  if (idx<0) or (idx>=Count) then
+    begin
+      result := '';
+    end
+  else
+    begin
+      mth := Child[idx] as TlkJSONobjectmethod;
+      result := mth.Name;
+    end;
+end;
+
+procedure TlkJSONobject.SetFieldByIndex(idx: Integer;
+  const Value: TlkJSONbase);
+var
+  nm:WideString;
+begin
+  nm := GetNameOf(idx);
+  if nm<>'' then
+    begin
+      Field[nm] := Value;
+    end;
+end;
+
 { TlkJSON }
 
 class function TlkJSON.GenerateText(obj: TlkJSONbase): string;
@@ -988,7 +1028,7 @@ class function TlkJSON.ParseText(txt: string): TlkJSONbase;
                 't': ws := ws + #9;
                 'u':
                   begin
-                    ws := ws + widechar(strtoint('$' + copy(ws, idx +
+                    ws := ws + widechar(strtoint('$' + copy(txt, idx +
                       1, 4)));
                     idx := idx + 4;
                   end;
@@ -1235,16 +1275,18 @@ var
   x1, x2, x3, x4: byte;
 begin
   result := 0;
+//  result := 0;
   x1 := 0;
   x2 := 1;
   for i := 1 to length(ws) do
     begin
       j := ord(ws[i]);
-      x1 := (x1 + j) and $FF;
-      x2 := (x2 + 1 + (j shr 8)) and $FF;
+// first version of hashing
+      x1 := (x1 + j) {and $FF};
+      x2 := (x2 + 1 + (j shr 8)) {and $FF};
       x3 := rnd_table[x1];
       x4 := rnd_table[x3];
-      result := ((x1 * x4) + (x3 * x2)) xor result;
+      result := ((x1 * x4) + (x2 * x3)) xor result;
     end;
 end;
 
