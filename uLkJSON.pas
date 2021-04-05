@@ -1,7 +1,7 @@
 {
-  LkJSON v1.03
+  LkJSON v1.04
 
-  14 march 2008
+  05 april 2008
 
 * Copyright (c) 2006,2007,2008 Leonid Koninin
 * leon_kon@users.sourceforge.net
@@ -31,6 +31,10 @@
 
   changes:
 
+  v1.04 05/04/2008 + a declaration of Field property moved from TlkJSONobject
+                     to TlkJSONbase; thanx for idea to Andrey Lukyanov; this
+                     improve objects use, look the bottom of SAMPLE2.DPR
+                   * fixed field name in TlkJSONobject to WideString
   v1.03 14/03/2008 + added a code for generating readable JSON text, sended to
                      me by Kusnassriyanto Saiful Bahri, thanx to him!
                    * from this version, library distributed with BSD
@@ -169,10 +173,11 @@ type
     procedure SetChild(idx: Integer; const AValue: TlkJSONbase);
       virtual;
     function GetCount: Integer; virtual;
+    function GetField(AName: Variant):TlkJSONbase; virtual;
   public
+    property Field[AName: Variant]: TlkJSONbase read GetField;
     property Count: Integer read GetCount;
-    property Child[idx: Integer]: TlkJSONbase read GetChild
-      write SetChild;
+    property Child[idx: Integer]: TlkJSONbase read GetChild write SetChild;
     property Value: variant read GetValue write SetValue;
     class function SelfType: TlkJSONtypes; virtual;
     class function SelfTypeName: string; virtual;
@@ -238,6 +243,8 @@ type
     function ForEachElement(idx: Integer; var nm: string):
       TlkJSONbase; virtual;
 
+    function GetField(AName: Variant):TlkJSONbase; override;
+
     function _Add(obj: TlkJSONbase): Integer; virtual;
     procedure _Delete(iIndex: Integer); virtual;
     function _IndexOf(obj: TlkJSONbase): Integer; virtual;
@@ -255,6 +262,7 @@ type
   end;
 
   TlkJSONlist = class(TlkJSONcustomlist)
+  protected
   public
     function Add(obj: TlkJSONbase): Integer; overload;
 
@@ -269,7 +277,6 @@ type
     class function Generate: TlkJSONlist;
     class function SelfType: TlkJSONtypes; override;
     class function SelfTypeName: string; override;
-
   end;
 
   TlkJSONobjectmethod = class(TlkJSONbase)
@@ -373,6 +380,7 @@ type
 {$ENDIF USE_HASH}
     function ForEachElement(idx: Integer; var nm: string): TlkJSONbase;
       override;
+    function GetField(AName: Variant):TlkJSONbase; override;
   public
     property UseHash: Boolean read FUseHash;
 {$IFDEF USE_HASH}
@@ -380,11 +388,13 @@ type
 {$ELSE}
     property HashTable: TlkBalTree read GetHashTable;
 {$ENDIF USE_HASH}
-    function GetField(nm: string): TlkJSONbase;
-    procedure SetField(nm: string; const AValue: TlkJSONbase);
 
     function Add(const aname: WideString; aobj: TlkJSONbase): Integer;
       overload;
+
+    function OldGetField(nm: WideString): TlkJSONbase;
+    procedure OldSetField(nm: WideString; const AValue: TlkJSONbase);
+
     function Add(const aname: WideString; bool: Boolean): Integer; overload;
     function Add(const aname: WideString; nmb: double): Integer; overload;
     function Add(const aname: WideString; s: string): Integer; overload;
@@ -395,8 +405,8 @@ type
     procedure Delete(idx: Integer);
     function IndexOfName(const aname: WideString): Integer;
     function IndexOfObject(aobj: TlkJSONbase): Integer;
-    property Field[nm: string]: TlkJSONbase read GetField write
-    SetField; default;
+    property Field[nm: WideString]: TlkJSONbase read OldGetField
+      write OldSetField; default;
 
     constructor Create(bUseHash: Boolean = true);
     destructor Destroy; override;
@@ -566,6 +576,11 @@ end;
 function TlkJSONbase.GetCount: Integer;
 begin
   result := 0;
+end;
+
+function TlkJSONbase.GetField(AName: Variant):TlkJSONbase;
+begin
+  result := self;
 end;
 
 function TlkJSONbase.GetValue: variant;
@@ -816,6 +831,21 @@ end;
 
 ///---- renamed to here
 
+function TlkJSONcustomlist.GetField(AName: Variant):TlkJSONbase;
+var
+  index: Integer;
+begin
+  if VarIsNumeric(AName) then
+    begin
+      index := integer(AName);
+      result := GetChild(index);
+    end
+  else
+    begin
+      result := inherited GetField(AName);
+    end;
+end;
+
 function TlkJSONcustomlist.ForEachElement(idx: Integer; var nm:
   string): TlkJSONbase;
 begin
@@ -1002,7 +1032,7 @@ begin
   result := TlkJSONobject.Create(AUseHash);
 end;
 
-function TlkJSONobject.GetField(nm: string): TlkJSONbase;
+function TlkJSONobject.OldGetField(nm: WideString): TlkJSONbase;
 var
   mth: TlkJSONobjectmethod;
   i: Integer;
@@ -1063,7 +1093,7 @@ begin
     end;
 end;
 
-procedure TlkJSONobject.SetField(nm: string; const AValue:
+procedure TlkJSONobject.OldSetField(nm: WideString; const AValue:
   TlkJSONbase);
 var
   mth: TlkJSONobjectmethod;
@@ -1164,6 +1194,14 @@ function TlkJSONobject.ForEachElement(idx: Integer;
 begin
   nm := GetNameOf(idx);
   result := GetFieldByIndex(idx);
+end;
+
+function TlkJSONobject.GetField(AName: Variant):TlkJSONbase;
+begin
+  if VarIsStr(AName) then
+    result := OldGetField(VarToWideStr(AName))
+  else
+    result := inherited GetField(AName);
 end;
 
 {$IFDEF USE_HASH}
@@ -1369,7 +1407,7 @@ var
   var
     delta: Integer;
   begin
-    delta := 20000;
+    delta := 50000;
     if pt0 = nil then
       begin
         pt0 := AllocMem(delta);

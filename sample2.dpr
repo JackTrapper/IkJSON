@@ -1,6 +1,6 @@
 // Sample 2: how to get child type and subobject fields
 //
-// Leonid Koninin, 02/03/2007
+// Leonid Koninin, 05/04/2008
 
 program sample2;
 
@@ -8,6 +8,7 @@ program sample2;
 
 uses
   SysUtils,
+  variants,
   uLkJSON in 'uLkJSON.pas';
 
 var
@@ -16,7 +17,7 @@ var
   s: String;
   i: Integer;
 begin
-  s := '{"string1":"one","string2":"two",'+
+  s := '{"string1":"123","string2":"two",'+
     '"childobject":{"objstr1":"Oone","objstr2":"Otwo"}}';
   writeln(s);
 // restore object (parse text)
@@ -59,6 +60,11 @@ begin
 // new v0.99+ syntax!
   writeln(xs.getString('objstr1'));
   writeln(xs.getString('objstr2'));
+// for 1.04+ syntax
+  s := vartostr(js.Field['childobject'].Field['objstr1'].Value);
+  writeln(s);
+  s := vartostr(js.Field['childobject'].Field['objstr2'].Value);
+  writeln(s);
 //
   readln;
   js.Free;
