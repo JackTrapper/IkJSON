@@ -1,5 +1,7 @@
 {
-  LkJSON v0.91
+  LkJSON v0.92
+
+  02 march 2007
 
   Copyright (C) 2006 Leonid Koninin
   leon_kon@users.sourceforge.net
@@ -18,7 +20,14 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+  changes:
+
+  v0.92 03/02/2007 + add some fix to TlkJSON.ParseText to fix bug with parsing
+                     objects - object methods not always added properly
+                     to hash array (thanx to Chris Matheson)
+  ...
 }
+
 unit uLkJSON;
 
 interface
@@ -161,8 +170,7 @@ type
     procedure Delete(idx: Integer);
     function IndefOfName(aname: WideString): Integer;
     function IndefOfObject(aobj: TlkJSONbase): Integer;
-    property Field[nm: string]: TlkJSONbase read GetField write
-    SetField;
+    property Field[nm: string]: TlkJSONbase read GetField write SetField;
     procedure BeforeDestruction; override;
     procedure AfterConstruction; override;
     class function Generate: TlkJSONobject;
@@ -664,6 +672,7 @@ class function TlkJSON.ParseText(txt: string): TlkJSONbase;
   end;
 
   procedure add_child(var o, c: TlkJSONbase);
+  var i: Integer;
   begin
     if o = nil then
       begin
@@ -681,7 +690,8 @@ class function TlkJSON.ParseText(txt: string): TlkJSONbase;
           end
         else if o is TlkJSONobject then
           begin
-            TlkJSONobject(o)._Add(c);
+            i := TlkJSONobject(o)._Add(c);
+            TlkJSONobject(o).ht.AddPair(TlkJSONobjectmethod(c).Name,i);
           end;
       end;
   end;
