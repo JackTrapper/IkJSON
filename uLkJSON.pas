@@ -1,7 +1,7 @@
 {
-  LkJSON v0.96
+  LkJSON v0.98
 
-  30 march 2007
+  09 may 2007
 
   Copyright (C) 2006,2007 Leonid Koninin
   leon_kon@users.sourceforge.net
@@ -22,6 +22,11 @@
 
   changes:
 
+  v0.98 09/05/2007 * fix small bug in work with WideStrings(UTF8), thanx to
+                     IVO GELOV to description and sources
+  v0.97 10/04/2007 + add capabilities to work with KOL delphi projects; for
+                     this will define KOL variable in begin of text; of course,
+                     in this case object TlkJSONstreamed is not compiled.
   v0.96 03/30/2007 + add TlkJSONFuncEnum and method ForEach in all
                      TlkJSONcustomlist descendants
                    + add property UseHash(r/o) to TlkJSONobject, and parameter
@@ -61,16 +66,21 @@ unit uLkJSON;
 
 interface
 
+{.$DEFINE KOL}
+{.$define DOTNET}
+
 uses windows,
   SysUtils,
+{$IFNDEF KOL}
   classes,
+{$ELSE}
+  kol,
+{$ENDIF}
   variants;
 
 type
   TlkJSONtypes = (jsBase, jsNumber, jsString, jsBoolean, jsNull,
     jsList, jsObject);
-
-{.$define DOTNET}
 
 {$IFDEF DOTNET}
 
@@ -286,12 +296,14 @@ type
     class function GenerateText(obj: TlkJSONbase): string;
   end;
 
+{$IFNDEF KOL}
   TlkJSONstreamed = class(TlkJSON)
     class function LoadFromStream(src: TStream): TlkJSONbase;
     class procedure SaveToStream(obj: TlkJSONbase; dst: TStream);
     class function LoadFromFile(srcname: string): TlkJSONbase;
     class procedure SaveToFile(obj: TlkJSONbase; dstname: string);
   end;
+{$ENDIF}
 
 implementation
 
@@ -303,6 +315,20 @@ type
     idx: Integer;
     constructor Create(idx: Integer; msg: string);
   end;
+
+// author of this routine is IVO GELOV
+function code2utf(num: Integer): UTF8String;
+begin
+  if num < 128 then Result := chr(num)
+  else if num < 2048 then
+    Result := chr((num shr 6) + 192) + chr((num and 63) + 128)
+  else if num < 65536 then
+    Result := chr((num shr 12) + 224) + chr(((num shr 6) and 63) + 128)
+    + chr((num and 63) + 128)
+  else if num < 2097152 then
+    Result := chr((num shr 18) + 240) + chr(((num shr 12) and 63) + 128)
+    + chr(((num shr 6) and 63) + 128) + chr((num and 63) + 128);
+end;
 
 { TlkJSONbase }
 
@@ -1151,8 +1177,9 @@ class function TlkJSON.ParseText(txt: string): TlkJSONbase;
                 't': ws := ws + #9;
                 'u':
                   begin
-                    ws := ws + widechar(strtoint('$' +
-                      copy(txt, idx + 1, 4)));
+//                    ws := ws + widechar(strtoint('$' +
+//                      copy(txt, idx + 1, 4)));
+                    ws := ws + code2utf(strtoint('$' + copy(txt, idx + 1, 4)));
                     idx := idx + 4;
                   end;
               end;
@@ -1517,6 +1544,7 @@ begin
 end;
 
 { TlkJSONstreamed }
+{$IFNDEF KOL}
 
 class function TlkJSONstreamed.LoadFromFile(srcname: string):
   TlkJSONbase;
@@ -1571,6 +1599,8 @@ begin
   ws := GenerateText(obj);
   dst.Write(pchar(ws)^, length(ws));
 end;
+
+{$ENDIF}
 
 { TlkJSONdotnetclass }
 

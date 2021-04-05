@@ -50,7 +50,7 @@ begin
   writeln(ws);
   writeln('press enter...');
   readln;
-// works in 0.94 only!
+// works in 0.94+ only!
   js := TlkJSONobject(xs);
   for i := 1 to 10 do
     begin
