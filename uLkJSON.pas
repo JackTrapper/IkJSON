@@ -1,7 +1,7 @@
 {
-  LkJSON v1.06
+  LkJSON v1.07
 
-  13 march 2009
+  06 november 2009
 
 * Copyright (c) 2006,2007,2008,2009 Leonid Koninin
 * leon_kon@users.sourceforge.net
@@ -31,6 +31,9 @@
 
   changes:
 
+  v1.07 06/11/2009 * fixed a bug in js_string - thanks to Andrew G. Khodotov
+                   * fixed error with double-slashes - thanks to anonymous user
+                   * fixed a BOM bug in parser, thanks to jasper_dale
   v1.06 13/03/2009 * fixed a bug in string parsing routine
                    * looked routine from the Adrian M. Jones, and get some
                      ideas from it; thanks a lot, Adrian!
@@ -1824,7 +1827,7 @@ var
           else
             Result := Result + s[j];
           inc(j);
-        until j >= length(s);
+        until j > length(s);
       end;
     end;
 
@@ -1841,42 +1844,34 @@ var
 
     inc(idx);
     widx := idx;
+
+    fin:=false;
     REPEAT
-//      i := posex('\',txt,idx);
-//      j := posex('"',txt,idx);
       i := 0;
-      j := idx;
-      while (j<=length(txt)) and (txt[j]<>'"') do
+      j := 0;
+      while (widx<=length(txt)) and (j=0) do
         begin
-          if txt[j] = '\' then i := j;
-          inc(j);
+          if (i=0) and (txt[widx]='\') then i:=widx;
+          if (j=0) and (txt[widx]='"') then j:=widx;
+          inc(widx);
         end;
-      if j>length(txt) then j := 0;
-      fin := true;
-      if i = 0 then
-        begin
-          if j = 0 then
-            begin
-              result := false;
-              exit;
-            end;
-          ws := copy(txt,widx,j-widx);
-          idx := j;
-        end
-      else if i<j then
-        begin
-          idx := i + 2;
-          fin := false;
-        end
-      else
-        begin
-          ws := copy(txt,widx,j-widx);
-          idx := j;
-        end;
-      if idx>length(txt) then
+// incorrect string!!!
+      if j=0 then
         begin
           result := false;
           exit;
+        end;
+// if we have no slashed chars in string
+      if (i=0) or (j<i) then
+        begin
+          ws := copy(txt,idx,j-idx);
+          idx := j;
+          fin := true;
+        end
+// if i>0 and j>=i - skip slashed char
+      else
+        begin
+          widx:=i+2;
         end;
     UNTIL fin;
 
@@ -2025,6 +2020,13 @@ begin
   if txt = '' then exit;
   try
     idx := 1;
+    // skip a BOM utf8 marker
+    if copy(txt,idx,3)=#239#187#191 then
+      begin
+        inc(idx,3);
+    // if there are only a BOM - exit;
+        if idx>length(txt) then exit;
+      end;
     if not js_base(idx, idx, result) then FreeAndNil(result);
   except
     if assigned(result) then FreeAndNil(result);
