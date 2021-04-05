@@ -20,6 +20,7 @@ var
 begin
   Randomize;
   js := TlkJSONobject.Create;
+//  js.HashTable.HashOf := js.HashTable.SimpleHashOf;
   k := GetTickCount;
   for i := 0 to 5000 do
     begin
@@ -33,7 +34,7 @@ begin
   writeln('records inserted:',js.count);
   writeln('time for insert:',k);
   writeln('hash table counters:');
-  writeln(js.ht.counters);
+  writeln(js.hashtable.counters);
   k := GetTickCount;
   ws := TlkJSON.GenerateText(js);
   writeln('text length:',length(ws));
@@ -61,5 +62,5 @@ begin
   writeln('press enter...');
   readln;
   if assigned(xs) then FreeAndNil(xs);
-  js.Free;
+//  js.Free;
 end.
