@@ -1,7 +1,7 @@
 {
-  LkJSON v0.92
+  LkJSON v0.93
 
-  02 march 2007
+  05 march 2007
 
   Copyright (C) 2006 Leonid Koninin
   leon_kon@users.sourceforge.net
@@ -22,6 +22,12 @@
 
   changes:
 
+  v0.93 03/05/2007 + add overloaded functions to list and object
+                   + add enum type TlkJSONtypes
+                   + add functions: SelfType:TlkJSONtypes and
+                     SelfTypeName: String to every TlkJSONbase child
+                   * fix mistype 'IndefOfName' to 'IndexOfName'
+                   * fix mistype 'IndefOfObject' to 'IndexOfObject'
   v0.92 03/02/2007 + add some fix to TlkJSON.ParseText to fix bug with parsing
                      objects - object methods not always added properly
                      to hash array (thanx to Chris Matheson)
@@ -33,11 +39,12 @@ unit uLkJSON;
 interface
 
 uses windows,
-  classes,
   SysUtils,
   variants;
 
 type
+  TlkJSONtypes = (jsBase,jsNumber,jsString,jsBoolean,jsNull,jsList,jsObject);
+
   TlkJSONbase = class
   protected
     function GetValue: variant; virtual;
@@ -63,6 +70,8 @@ type
     property Child[idx: Integer]: TlkJSONbase read GetChild write
     SetChild;
     property Value: variant read GetValue write SetValue;
+    function SelfType:TlkJSONtypes; virtual;
+    function SelfTypeName: String; virtual;
   end;
 
   TlkJSONnumber = class(TlkJSONbase)
@@ -73,6 +82,8 @@ type
   public
     procedure AfterConstruction; override;
     class function Generate(n: extended = 0): TlkJSONnumber;
+    function SelfType: TlkJSONtypes; override;
+    function SelfTypeName: String; override;
   end;
 
   TlkJSONstring = class(TlkJSONbase)
@@ -83,6 +94,8 @@ type
   public
     procedure AfterConstruction; override;
     class function Generate(ws: WideString = ''): TlkJSONstring;
+    function SelfType: TlkJSONtypes; override;
+    function SelfTypeName: String; override;
   end;
 
   TlkJSONboolean = class(TlkJSONbase)
@@ -93,12 +106,17 @@ type
   public
     procedure AfterConstruction; override;
     class function Generate(b: Boolean = true): TlkJSONboolean;
+    function SelfType: TlkJSONtypes; override;
+    function SelfTypeName: String; override;
   end;
 
   TlkJSONnull = class(TlkJSONbase)
   protected
     function GetValue: Variant; override;
     function Generate: TlkJSONnull;
+  public
+    function SelfType: TlkJSONtypes; override;
+    function SelfTypeName: String; override;
   end;
 
   TlkJSONcustomlist = class(TlkJSONbase)
@@ -118,10 +136,20 @@ type
 
   TlkJSONlist = class(TlkJSONcustomlist)
   public
-    function Add(obj: TlkJSONbase): Integer;
+    function Add(obj: TlkJSONbase): Integer; overload;
+
+    function Add(bool: Boolean): Integer; overload;
+    function Add(nmb: double): Integer; overload;
+    function Add(s: String): Integer; overload;
+    function Add(ws: WideString): Integer; overload;
+    function Add(inmb: Integer): Integer; overload;
+
     procedure Delete(idx: Integer);
     function IndexOf(obj: TlkJSONbase): Integer;
     class function Generate: TlkJSONlist;
+    function SelfType: TlkJSONtypes; override;
+    function SelfTypeName: String; override;
+    
   end;
 
   TlkJSONobjectmethod = class(TlkJSONbase)
@@ -166,14 +194,24 @@ type
     ht: TlkHashTable;
     function GetField(nm: string): TlkJSONbase;
     procedure SetField(nm: string; const Value: TlkJSONbase);
-    function Add(aname: WideString; aobj: TlkJSONbase): Integer;
+
+    function Add(aname: WideString; aobj: TlkJSONbase): Integer; overload;
+
+    function Add(aname: WideString; bool: Boolean): Integer; overload;
+    function Add(aname: WideString; nmb: double): Integer; overload;
+    function Add(aname: WideString; s: String): Integer; overload;
+    function Add(aname: WideString; ws: WideString): Integer; overload;
+    function Add(aname: WideString; inmb: Integer): Integer; overload;
+
     procedure Delete(idx: Integer);
-    function IndefOfName(aname: WideString): Integer;
-    function IndefOfObject(aobj: TlkJSONbase): Integer;
+    function IndexOfName(aname: WideString): Integer;
+    function IndexOfObject(aobj: TlkJSONbase): Integer;
     property Field[nm: string]: TlkJSONbase read GetField write SetField;
     procedure BeforeDestruction; override;
     procedure AfterConstruction; override;
     class function Generate: TlkJSONobject;
+    function SelfType: TlkJSONtypes; override;
+    function SelfTypeName: String; override;
   end;
 
   TlkJSON = class
@@ -210,6 +248,16 @@ begin
   result := variants.Null;
 end;
 
+function TlkJSONbase.SelfType: TlkJSONtypes;
+begin
+  result := jsBase;
+end;
+
+function TlkJSONbase.SelfTypeName: String;
+begin
+  result := 'jsBase';
+end;
+
 procedure TlkJSONbase.SetChild(idx: Integer; const Value:
   TlkJSONbase);
 begin
@@ -240,6 +288,16 @@ begin
   result := FValue;
 end;
 
+function TlkJSONnumber.SelfType: TlkJSONtypes;
+begin
+  result := jsNumber;
+end;
+
+function TlkJSONnumber.SelfTypeName: String;
+begin
+  result := 'jsNumber';
+end;
+
 procedure TlkJSONnumber.SetValue(const Value: Variant);
 begin
   FValue := VarAsType(Value, varDouble);
@@ -262,6 +320,16 @@ end;
 function TlkJSONstring.GetValue: Variant;
 begin
   result := FValue;
+end;
+
+function TlkJSONstring.SelfType: TlkJSONtypes;
+begin
+  result := jsString;
+end;
+
+function TlkJSONstring.SelfTypeName: String;
+begin
+  result := 'jsString';
 end;
 
 procedure TlkJSONstring.SetValue(const Value: Variant);
@@ -287,6 +355,16 @@ begin
   result := FValue;
 end;
 
+function TlkJSONboolean.SelfType: TlkJSONtypes;
+begin
+  Result := jsBoolean;
+end;
+
+function TlkJSONboolean.SelfTypeName: String;
+begin
+  Result := 'jsBoolean';
+end;
+
 procedure TlkJSONboolean.SetValue(const Value: Variant);
 begin
   FValue := boolean(Value);
@@ -302,6 +380,16 @@ end;
 function TlkJSONnull.GetValue: Variant;
 begin
   result := variants.Null;
+end;
+
+function TlkJSONnull.SelfType: TlkJSONtypes;
+begin
+  result := jsNull;
+end;
+
+function TlkJSONnull.SelfTypeName: String;
+begin
+  result := 'jsNull';
 end;
 
 { TlkJSONcustomlist }
@@ -431,6 +519,31 @@ begin
   result := _Add(obj);
 end;
 
+function TlkJSONlist.Add(nmb: double): Integer;
+begin
+  self.Add(TlkJSONnumber.Generate(nmb));
+end;
+
+function TlkJSONlist.Add(bool: Boolean): Integer;
+begin
+  self.Add(TlkJSONboolean.Generate(bool));
+end;
+
+function TlkJSONlist.Add(inmb: Integer): Integer;
+begin
+  self.Add(TlkJSONnumber.Generate(inmb));
+end;
+
+function TlkJSONlist.Add(ws: WideString): Integer;
+begin
+  self.Add(TlkJSONstring.Generate(ws));
+end;
+
+function TlkJSONlist.Add(s: String): Integer;
+begin
+  self.Add(TlkJSONstring.Generate(s));
+end;
+
 procedure TlkJSONlist.Delete(idx: Integer);
 begin
   _Delete(idx);
@@ -444,6 +557,16 @@ end;
 function TlkJSONlist.IndexOf(obj: TlkJSONbase): Integer;
 begin
   result := _IndexOf(obj);
+end;
+
+function TlkJSONlist.SelfType: TlkJSONtypes;
+begin
+  result := jsList;
+end;
+
+function TlkJSONlist.SelfTypeName: String;
+begin
+  result := 'jsList';
 end;
 
 { TlkJSONobject }
@@ -499,7 +622,7 @@ var
   mth: TlkJSONobjectmethod;
   i: Integer;
 begin
-  i := IndefOfName(nm);
+  i := IndexOfName(nm);
   if i = -1 then
     begin
       result := nil;
@@ -511,7 +634,7 @@ begin
     end;
 end;
 
-function TlkJSONobject.IndefOfName(aname: WideString): Integer;
+function TlkJSONobject.IndexOfName(aname: WideString): Integer;
 {
 var
   mth: TlkJSONobjectmethod;
@@ -533,7 +656,7 @@ begin
   result := ht.IndexOf(aname);
 end;
 
-function TlkJSONobject.IndefOfObject(aobj: TlkJSONbase): Integer;
+function TlkJSONobject.IndexOfObject(aobj: TlkJSONbase): Integer;
 var
   mth: TlkJSONobjectmethod;
   i: Integer;
@@ -556,12 +679,47 @@ var
   mth: TlkJSONobjectmethod;
   i: Integer;
 begin
-  i := IndefOfName(nm);
+  i := IndexOfName(nm);
   if i <> -1 then
     begin
       mth := TlkJSONobjectmethod(FValue[i]);
       mth.FValue := Value;
     end;
+end;
+
+function TlkJSONobject.Add(aname: WideString; nmb: double): Integer;
+begin
+  self.Add(aname,TlkJSONnumber.Generate(nmb));
+end;
+
+function TlkJSONobject.Add(aname: WideString; bool: Boolean): Integer;
+begin
+  self.Add(aname,TlkJSONboolean.Generate(bool));
+end;
+
+function TlkJSONobject.Add(aname: WideString; s: String): Integer;
+begin
+  self.Add(aname,TlkJSONstring.Generate(s));
+end;
+
+function TlkJSONobject.Add(aname: WideString; inmb: Integer): Integer;
+begin
+  self.Add(aname,TlkJSONnumber.Generate(inmb));
+end;
+
+function TlkJSONobject.Add(aname, ws: WideString): Integer;
+begin
+  self.Add(aname,TlkJSONstring.Generate(ws));
+end;
+
+function TlkJSONobject.SelfType: TlkJSONtypes;
+begin
+  Result := jsObject;
+end;
+
+function TlkJSONobject.SelfTypeName: String;
+begin
+  Result := 'jsObject';
 end;
 
 { TlkJSON }
