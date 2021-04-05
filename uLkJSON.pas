@@ -1,7 +1,7 @@
 {
-  LkJSON v1.05
+  LkJSON v1.06
 
-  25 jan 2009
+  13 march 2009
 
 * Copyright (c) 2006,2007,2008,2009 Leonid Koninin
 * leon_kon@users.sourceforge.net
@@ -31,6 +31,11 @@
 
   changes:
 
+  v1.06 13/03/2009 * fixed a bug in string parsing routine
+                   * looked routine from the Adrian M. Jones, and get some
+                     ideas from it; thanks a lot, Adrian!
+                   * checked error reported by phpop and fix it in the string
+                     routine; also, thanks for advice.
   v1.05 26/01/2009 + added port to D2009 by Daniele Teti, thanx a lot! really,
                      i haven't the 2009 version, so i can't play with it. I was
                      add USE_D2009 directive below, disabled by default
@@ -1801,7 +1806,8 @@ var
             inc(j);
             case s[j] of
               '\': Result := Result + '\';
-              '"': Result := Result + '''';
+              '"': Result := Result + '"';
+              '''': Result := Result + '''';
               '/': Result := Result + '/';
               'b': Result := Result + #8;
               'f': Result := Result + #12;
@@ -1825,31 +1831,57 @@ var
   var
     js: TlkJSONstring;
     fin: Boolean;
-    ws: WideString;
-    i: Integer;
+    ws: String;
+    i,j,widx: Integer;
   begin
     skip_spc(idx);
 
     result := xe(idx) and (txt[idx] = '"');
     if not result then exit;
 
-    ws := '';
-
     inc(idx);
-    result := false;
-
-    i := PosEx('"', txt, idx);
-    if (i = 0) then
-    begin
-      idx := length(txt);
-      exit;
-    end;
-
-    Result := true;
-    ws := copy(txt, idx, i-idx);
-    inc(idx, length(ws)+1);
+    widx := idx;
+    REPEAT
+//      i := posex('\',txt,idx);
+//      j := posex('"',txt,idx);
+      i := 0;
+      j := idx;
+      while (j<=length(txt)) and (txt[j]<>'"') do
+        begin
+          if txt[j] = '\' then i := j;
+          inc(j);
+        end;
+      if j>length(txt) then j := 0;
+      fin := true;
+      if i = 0 then
+        begin
+          if j = 0 then
+            begin
+              result := false;
+              exit;
+            end;
+          ws := copy(txt,widx,j-widx);
+          idx := j;
+        end
+      else if i<j then
+        begin
+          idx := i + 2;
+          fin := false;
+        end
+      else
+        begin
+          ws := copy(txt,widx,j-widx);
+          idx := j;
+        end;
+      if idx>length(txt) then
+        begin
+          result := false;
+          exit;
+        end;
+    UNTIL fin;
 
     ws := strSpecialChars(ws);
+    inc(idx);
 
     js := TlkJSONstring.Create;
 {$ifdef USE_D2009}
