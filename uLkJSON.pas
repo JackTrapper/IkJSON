@@ -1,7 +1,7 @@
 {
-  LkJSON v0.94
+  LkJSON v0.95
 
-  27 march 2007
+  29 march 2007
 
   Copyright (C) 2006,2007 Leonid Koninin
   leon_kon@users.sourceforge.net
@@ -22,10 +22,12 @@
 
   changes:
 
-  v0.94 27/03/2007 + add properties NameOf and FieldByIndex to TlkJSONobject
+  v0.95 03/29/2007 + add object TlkJSONstreamed what descendant of TlkJSON and
+                     able to load/save JSON objects from/to streams/files.
+                   * fixed small bug in generating of unicode strings representation
+  v0.94 03/27/2007 + add properties NameOf and FieldByIndex to TlkJSONobject
                    * fix small error in parsing unicode chars
                    * small changes in hashing code (try to speed up)
-
   v0.93 03/05/2007 + add overloaded functions to list and object
                    + add enum type TlkJSONtypes
                    + add functions: SelfType:TlkJSONtypes and
@@ -44,6 +46,7 @@ interface
 
 uses windows,
   SysUtils,
+  classes,
   variants;
 
 type
@@ -216,6 +219,13 @@ type
   public
     class function ParseText(txt: string): TlkJSONbase;
     class function GenerateText(obj: TlkJSONbase): string;
+  end;
+
+  TlkJSONstreamed = class (TlkJSON)
+    class function LoadFromStream(src:TStream):TlkJSONbase;
+    class procedure SaveToStream(obj:TlkJSONbase;dst:TStream);
+    class function LoadFromFile(srcname: String):TlkJSONbase;
+    class procedure SaveToFile(obj:TlkJSONbase;dstname:string);
   end;
 
 implementation
@@ -1379,6 +1389,60 @@ begin
       x0 := (x0 * 21 + 79) and $FF;
       rnd_table[i] := x0;
     end;
+end;
+
+{ TlkJSONstreamed }
+
+class function TlkJSONstreamed.LoadFromFile(srcname: String): TlkJSONbase;
+var
+  fs:TFileStream;
+begin
+  result := nil;
+  if not FileExists(srcname) then exit;
+  try
+    fs := TFileStream.Create(srcname,fmOpenRead);
+    result := LoadFromStream(fs);
+  finally
+    if Assigned(fs) then FreeAndNil(fs);
+  end;
+end;
+
+class function TlkJSONstreamed.LoadFromStream(src: TStream): TlkJSONbase;
+var
+  ws: String;
+  len: int64;
+begin
+  result := nil;
+  if not assigned(src) then exit;
+  len := src.Size-src.Position;
+  SetLength(ws,len);
+  src.Read(pchar(ws)^,len);
+  result := ParseText(ws);
+end;
+
+class procedure TlkJSONstreamed.SaveToFile(obj: TlkJSONbase;
+  dstname: string);
+var
+  fs:TFileStream;
+begin
+  if not assigned(obj) then exit;
+  try
+    fs := TFileStream.Create(dstname,fmCreate);
+    SaveToStream(obj,fs);
+  finally
+    if Assigned(fs) then FreeAndNil(fs);
+  end;
+end;
+
+class procedure TlkJSONstreamed.SaveToStream(obj: TlkJSONbase;
+  dst: TStream);
+var
+  ws: String;
+begin
+  if not assigned(obj) then exit;
+  if not assigned(dst) then exit;
+  ws := GenerateText(obj);
+  dst.Write(pchar(ws)^,length(ws));
 end;
 
 initialization
