@@ -1,7 +1,7 @@
 // Sample 1: how to generate text of an object and obtain object from text;
 // how to add an field to object and get it back.
 //
-// Leonid Koninin, 02/03/2007
+// Leonid Koninin, 02/03/2007 modified 14/03/2008
 
 program sample1;
 
@@ -23,6 +23,13 @@ begin
 // get the text of object
   s := TlkJSON.GenerateText(js);
   writeln(s);
+  writeln;
+  writeln('more readable variant:');
+// (ver 1.03+) generate readable text
+  i := 0;
+  s := GenerateReadableText(js,i);
+  writeln(s);
+
   js.Free;
 // restore object (parse text)
   js := TlkJSON.ParseText(s) as TlkJSONobject;

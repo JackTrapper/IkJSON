@@ -3,7 +3,7 @@
 //
 // Leon, 27/03/2007
 
-{.$define usefastmm}
+{$define usefastmm}
 
 program test;
 

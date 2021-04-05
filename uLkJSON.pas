@@ -1,27 +1,48 @@
 {
-  LkJSON v1.02
+  LkJSON v1.03
 
-  14 september 2007
+  14 march 2008
 
-  Copyright (C) 2006,2007 Leonid Koninin
-  leon_kon@users.sourceforge.net
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+* Copyright (c) 2006,2007,2008 Leonid Koninin
+* leon_kon@users.sourceforge.net
+* All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*     * Redistributions of source code must retain the above copyright
+*       notice, this list of conditions and the following disclaimer.
+*     * Redistributions in binary form must reproduce the above copyright
+*       notice, this list of conditions and the following disclaimer in the
+*       documentation and/or other materials provided with the distribution.
+*     * Neither the name of the <organization> nor the
+*       names of its contributors may be used to endorse or promote products
+*       derived from this software without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY Leonid Koninin ``AS IS'' AND ANY
+* EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL Leonid Koninin BE LIABLE FOR ANY
+* DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+* ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
   changes:
 
+  v1.03 14/03/2008 + added a code for generating readable JSON text, sended to
+                     me by Kusnassriyanto Saiful Bahri, thanx to him!
+                   * from this version, library distributed with BSD
+                     license, more pleasure for commercial programmers :)
+                   * was rewritten internal storing of objects, repacing
+                     hash tables with balanced trees (AA tree, by classic
+                     author's variant). On mine machine, with enabled fastmm,
+                     tree variant is about 30% slower in from-zero creation,
+                     but about 50% faster in parsing; also deletion of
+                     objects will be much faster than a hash-one.
+                     Hashes (old-style) can be switched on by enabling
+                     USE_HASH directive below
   v1.02 14/09/2007 * fix mistypes in diffrent places; thanx for reports
                      to Aleksandr Fedorov and Tobias Wrede
   v1.01 18/05/2007 * fix small bug in new text generation routine, check
@@ -63,7 +84,7 @@
   v0.96 03/30/2007 + add TlkJSONFuncEnum and method ForEach in all
                      TlkJSONcustomlist descendants
                    + add property UseHash(r/o) to TlkJSONobject, and parameter
-                     UseHash:Boolean to object constructors; set ti to false
+                     UseHash:Boolean to object constructors; set it to false
                      allow to disable using of hash-table, what can increase
                      speed of work in case of objects with low number of
                      methods(fields); [by default it is true]
@@ -96,21 +117,24 @@
 }
 
 unit uLkJSON;
-{$ifdef fpc}
-  {$mode objfpc}{$H+}
+
+{$IFDEF fpc}
+  {$MODE objfpc}
+  {$H+}
   {.$DEFINE HAVE_FORMATSETTING}
-{$else}
-  {$if RTLVersion > 14.00}
+{$ELSE}
+  {$IF RTLVersion > 14.00}
     {$DEFINE HAVE_FORMATSETTING}
-  {$ifend}
-{$endif}
+  {$IFEND}
+{$ENDIF}
 
 interface
 
 {.$DEFINE KOL}
 {.$define DOTNET}
-{$define THREADSAFE}
-{$define NEW_STYLE_GENERATE}
+{$DEFINE THREADSAFE}
+{$DEFINE NEW_STYLE_GENERATE}
+{.$DEFINE USE_HASH}
 
 uses windows,
   SysUtils,
@@ -147,7 +171,8 @@ type
     function GetCount: Integer; virtual;
   public
     property Count: Integer read GetCount;
-    property Child[idx: Integer]: TlkJSONbase read GetChild write SetChild;
+    property Child[idx: Integer]: TlkJSONbase read GetChild
+      write SetChild;
     property Value: variant read GetValue write SetValue;
     class function SelfType: TlkJSONtypes; virtual;
     class function SelfTypeName: string; virtual;
@@ -172,7 +197,8 @@ type
     procedure SetValue(const AValue: Variant); override;
   public
     procedure AfterConstruction; override;
-    class function Generate(const wsValue: WideString = ''): TlkJSONstring;
+    class function Generate(const wsValue: WideString = ''):
+      TlkJSONstring;
     class function SelfType: TlkJSONtypes; override;
     class function SelfTypeName: string; override;
   end;
@@ -204,7 +230,7 @@ type
   TlkJSONcustomlist = class(TlkJSONbase)
   protected
 //    FValue: array of TlkJSONbase;
-    fList:TList;
+    fList: TList;
     function GetCount: Integer; override;
     function GetChild(idx: Integer): TlkJSONbase; override;
     procedure SetChild(idx: Integer; const AValue: TlkJSONbase);
@@ -213,16 +239,17 @@ type
       TlkJSONbase; virtual;
 
     function _Add(obj: TlkJSONbase): Integer; virtual;
-    procedure _Delete(idx: Integer); virtual;
+    procedure _Delete(iIndex: Integer); virtual;
     function _IndexOf(obj: TlkJSONbase): Integer; virtual;
   public
-    procedure ForEach(cb: TlkJSONFuncEnum; data: pointer);
+    procedure ForEach(fnCallBack: TlkJSONFuncEnum; pUserData:
+      pointer);
     procedure AfterConstruction; override;
     procedure BeforeDestruction; override;
 
     function getInt(idx: Integer): Integer; virtual;
-    function getString(idx: Integer): String; virtual;
-    function getWideString(idx: Integer):WideString; virtual;
+    function getString(idx: Integer): string; virtual;
+    function getWideString(idx: Integer): WideString; virtual;
     function getDouble(idx: Integer): Double; virtual;
     function getBoolean(idx: Integer): Boolean; virtual;
   end;
@@ -251,6 +278,7 @@ type
     FName: WideString;
     procedure SetName(const AValue: WideString);
   public
+    property ObjValue: TlkJSONbase read FValue;
     procedure AfterConstruction; override;
     procedure BeforeDestruction; override;
     property Name: WideString read FName write SetName;
@@ -258,23 +286,25 @@ type
       TlkJSONobjectmethod;
   end;
 
+{$IFDEF USE_HASH}
   PlkHashItem = ^TlkHashItem;
   TlkHashItem = packed record
     hash: cardinal;
     index: Integer;
   end;
 
-  TlkHashFunction = function(const ws: WideString): cardinal of object;
+  TlkHashFunction = function(const ws: WideString): cardinal of
+    object;
 
   TlkHashTable = class
   private
     FHashFunction: TlkHashFunction;
     procedure SetHashFunction(const AValue: TlkHashFunction);
   protected
-//    a_h: array[0..255] of array of TlkHashItem;
     a_x: array[0..255] of TList;
     procedure hswap(j, k, l: Integer);
-    function InTable(const ws: WideString; var i, j, k: cardinal): Boolean;
+    function InTable(const ws: WideString; var i, j, k: cardinal):
+      Boolean;
   public
     function counters: string;
 
@@ -293,40 +323,80 @@ type
     destructor Destroy; override;
   end;
 
+{$ELSE}
+
+// implementation based on "Arne Andersson, Balanced Search Trees Made Simpler"
+
+  PlkBalNode = ^TlkBalNode;
+  TlkBalNode = packed record
+    left,right: PlkBalNode;
+    level: byte;
+    key: Integer;
+    nm: WideString;
+  end;
+
+  TlkBalTree = class
+  protected
+    fdeleted,flast,fbottom,froot: PlkBalNode;
+    procedure skew(var t:PlkBalNode);
+    procedure split(var t:PlkBalNode);
+  public
+    function counters: string;
+
+    procedure Clear;
+
+    function Insert(const ws: WideString; x: Integer): Boolean;
+    function Delete(const ws: WideString): Boolean;
+
+    function IndexOf(const ws: WideString): Integer;
+
+    constructor Create;
+    destructor Destroy; override;
+  end;
+{$ENDIF USE_HASH}
+
   TlkJSONobject = class(TlkJSONcustomlist)
   protected
+{$IFDEF USE_HASH}
     ht: TlkHashTable;
+{$ELSE}
+    ht: TlkBalTree;
+{$ENDIF USE_HASH}
     FUseHash: Boolean;
     function GetFieldByIndex(idx: Integer): TlkJSONbase;
     function GetNameOf(idx: Integer): WideString;
-    procedure SetFieldByIndex(idx: Integer; const AValue:
-      TlkJSONbase);
+    procedure SetFieldByIndex(idx: Integer; const AValue: TlkJSONbase);
+{$IFDEF USE_HASH}
     function GetHashTable: TlkHashTable;
-    function ForEachElement(idx: Integer; var nm: string):
-      TlkJSONbase;
+{$ELSE}
+    function GetHashTable: TlkBalTree;
+{$ENDIF USE_HASH}
+    function ForEachElement(idx: Integer; var nm: string): TlkJSONbase;
       override;
   public
     property UseHash: Boolean read FUseHash;
+{$IFDEF USE_HASH}
     property HashTable: TlkHashTable read GetHashTable;
+{$ELSE}
+    property HashTable: TlkBalTree read GetHashTable;
+{$ENDIF USE_HASH}
     function GetField(nm: string): TlkJSONbase;
     procedure SetField(nm: string; const AValue: TlkJSONbase);
 
     function Add(const aname: WideString; aobj: TlkJSONbase): Integer;
       overload;
-
-    function Add(const aname: WideString; bool: Boolean): Integer;
-      overload;
+    function Add(const aname: WideString; bool: Boolean): Integer; overload;
     function Add(const aname: WideString; nmb: double): Integer; overload;
     function Add(const aname: WideString; s: string): Integer; overload;
     function Add(const aname: WideString; const ws: WideString): Integer;
       overload;
-    function Add(const aname: WideString; inmb: Integer): Integer;
-      overload;
+    function Add(const aname: WideString; inmb: Integer): Integer; overload;
 
     procedure Delete(idx: Integer);
     function IndexOfName(const aname: WideString): Integer;
     function IndexOfObject(aobj: TlkJSONbase): Integer;
-    property Field[nm: string]: TlkJSONbase read GetField write SetField; default;
+    property Field[nm: string]: TlkJSONbase read GetField write
+    SetField; default;
 
     constructor Create(bUseHash: Boolean = true);
     destructor Destroy; override;
@@ -335,20 +405,21 @@ type
     class function SelfType: TlkJSONtypes; override;
     class function SelfTypeName: string; override;
 
-    property FieldByIndex[idx: Integer]: TlkJSONbase read GetFieldByIndex write SetFieldByIndex;
+    property FieldByIndex[idx: Integer]: TlkJSONbase read GetFieldByIndex
+    write SetFieldByIndex;
     property NameOf[idx: Integer]: WideString read GetNameOf;
 
     function getDouble(idx: Integer): Double; overload; override;
     function getInt(idx: Integer): Integer; overload; override;
-    function getString(idx: Integer): String; overload; override;
+    function getString(idx: Integer): string; overload; override;
     function getWideString(idx: Integer): WideString; overload; override;
     function getBoolean(idx: Integer): Boolean; overload; override;
 
-    function getDouble(nm: String): Double; overload;
-    function getInt(nm: String): Integer; overload;
-    function getString(nm: String): String; overload;
-    function getWideString(nm: String): WideString; overload;
-    function getBoolean(nm: String): Boolean; overload;
+    function getDouble(nm: string): Double; overload;
+    function getInt(nm: string): Integer; overload;
+    function getString(nm: string): string; overload;
+    function getWideString(nm: string): WideString; overload;
+    function getBoolean(nm: string): Boolean; overload;
   end;
 
   TlkJSON = class
@@ -366,9 +437,12 @@ type
   end;
 {$ENDIF}
 
+function GenerateReadableText(vObj: TlkJSONbase; var vLevel:
+  Integer): string;
+
 implementation
 
-uses math;
+uses math,strutils;
 
 type
   ElkIntException = class(Exception)
@@ -377,18 +451,109 @@ type
     constructor Create(idx: Integer; msg: string);
   end;
 
+// author of next two functions is Kusnassriyanto Saiful Bahri
+
+function Indent(vTab: Integer): string;
+begin
+  result := DupeString('  ', vTab);
+end;
+
+function GenerateReadableText(vObj: TlkJSONbase; var vLevel:
+  Integer): string;
+var
+  i: Integer;
+  vStr: string;
+  xs: TlkJSONstring;
+begin
+  vLevel := vLevel + 1;
+  if vObj is TlkJSONObject then
+    begin
+      vStr := '';
+      for i := 0 to TlkJSONobject(vObj).Count - 1 do
+        begin
+          if vStr <> '' then
+            begin
+              vStr := vStr + ','#13#10;
+            end;
+          vStr := vStr + Indent(vLevel) +
+            GenerateReadableText(TlkJSONobject(vObj).Child[i], vLevel);
+        end;
+      if vStr <> '' then
+        begin
+          vStr := '{'#13#10 + vStr + #13#10 + Indent(vLevel - 1) + '}';
+        end
+      else
+        begin
+          vStr := '{}';
+        end;
+      result := vStr;
+    end
+  else if vObj is TlkJSONList then
+    begin
+      vStr := '';
+      for i := 0 to TlkJSONList(vObj).Count - 1 do
+        begin
+          if vStr <> '' then
+            begin
+              vStr := vStr + ','#13#10;
+            end;
+          vStr := vStr + Indent(vLevel) +
+              GenerateReadableText(TlkJSONList(vObj).Child[i], vLevel);
+        end;
+      if vStr <> '' then
+        begin
+          vStr := '['#13#10 + vStr + #13#10 + Indent(vLevel - 1) + ']';
+        end
+      else
+        begin
+          vStr := '[]';
+        end;
+      result := vStr;
+    end
+  else if vObj is TlkJSONobjectmethod then
+    begin
+      vStr := '';
+      xs := TlkJSONstring.Create;
+      try
+        xs.Value := TlkJSONobjectMethod(vObj).Name;
+        vStr := GenerateReadableText(xs, vLevel);
+        vLevel := vLevel - 1;
+        vStr := vStr + ':' + GenerateReadableText(TlkJSONbase(
+          TlkJSONobjectmethod(vObj).ObjValue), vLevel);
+      //vStr := vStr + ':' + GenerateReadableText(TlkJSONbase(vObj), vLevel);
+        vLevel := vLevel + 1;
+        result := vStr;
+      finally
+        xs.Free;
+      end;
+    end
+  else
+    begin
+      if vObj is TlkJSONobjectmethod then
+        begin
+          if TlkJSONobjectMethod(vObj).Name <> '' then
+            begin
+            end;
+        end;
+      result := TlkJSON.GenerateText(vObj);
+    end;
+  vLevel := vLevel - 1;
+end;
+
 // author of this routine is IVO GELOV
+
 function code2utf(iNumber: Integer): UTF8String;
 begin
   if iNumber < 128 then Result := chr(iNumber)
   else if iNumber < 2048 then
     Result := chr((iNumber shr 6) + 192) + chr((iNumber and 63) + 128)
   else if iNumber < 65536 then
-    Result := chr((iNumber shr 12) + 224) + chr(((iNumber shr 6) and 63) + 128)
-    + chr((iNumber and 63) + 128)
+    Result := chr((iNumber shr 12) + 224) + chr(((iNumber shr 6) and
+      63) + 128) + chr((iNumber and 63) + 128)
   else if iNumber < 2097152 then
-    Result := chr((iNumber shr 18) + 240) + chr(((iNumber shr 12) and 63) + 128)
-    + chr(((iNumber shr 6) and 63) + 128) + chr((iNumber and 63) + 128);
+    Result := chr((iNumber shr 18) + 240) + chr(((iNumber shr 12) and
+      63) + 128) + chr(((iNumber shr 6) and 63) + 128) +
+      chr((iNumber and 63) + 128);
 end;
 
 { TlkJSONbase }
@@ -437,7 +602,8 @@ begin
   FValue := 0;
 end;
 
-class function TlkJSONnumber.Generate(AValue: extended): TlkJSONnumber;
+class function TlkJSONnumber.Generate(AValue: extended):
+  TlkJSONnumber;
 begin
   result := TlkJSONnumber.Create;
   result.FValue := AValue;
@@ -471,7 +637,8 @@ begin
   FValue := '';
 end;
 
-class function TlkJSONstring.Generate(const wsValue: WideString): TlkJSONstring;
+class function TlkJSONstring.Generate(const wsValue: WideString):
+  TlkJSONstring;
 begin
   result := TlkJSONstring.Create;
   result.FValue := wsValue;
@@ -504,7 +671,8 @@ begin
   FValue := false;
 end;
 
-class function TlkJSONboolean.Generate(AValue: Boolean): TlkJSONboolean;
+class function TlkJSONboolean.Generate(AValue: Boolean):
+  TlkJSONboolean;
 begin
   result := TlkJSONboolean.Create;
   result.Value := AValue;
@@ -579,12 +747,15 @@ begin
   inherited;
 end;
 
-procedure TlkJSONcustomlist._Delete(idx: Integer);
+// renamed
+
+procedure TlkJSONcustomlist._Delete(iIndex: Integer);
 begin
-  if not ((idx < 0) or (idx >= Count)) then
+  if not ((iIndex < 0) or (iIndex >= Count)) then
     begin
-      if fList.Items[idx]<>nil then TlkJSONbase(fList.Items[idx]).Free;
-      fList.Delete(idx);
+      if fList.Items[iIndex] <> nil then
+        TlkJSONbase(fList.Items[iIndex]).Free;
+      fList.Delete(iIndex);
     end;
 end;
 
@@ -617,30 +788,33 @@ procedure TlkJSONcustomlist.SetChild(idx: Integer; const AValue:
 begin
   if not ((idx < 0) or (idx >= Count)) then
     begin
-      if fList.Items[idx]<>nil then TlkJSONbase(fList.Items[idx]).Free;
+      if fList.Items[idx] <> nil then
+        TlkJSONbase(fList.Items[idx]).Free;
       fList.Items[idx] := AValue;
     end;
 end;
 
-///---- renamed to here
-
-procedure TlkJSONcustomlist.ForEach(cb: TlkJSONFuncEnum; data:
+procedure TlkJSONcustomlist.ForEach(fnCallBack: TlkJSONFuncEnum;
+  pUserData:
   pointer);
 var
-  i: Integer;
-  doCont: Boolean;
-  obj: TlkJSONbase;
-  ws: string;
+  iCount: Integer;
+  IsContinue: Boolean;
+  anJSON: TlkJSONbase;
+  wsObject: string;
 begin
-  if not assigned(cb) then exit;
-  doCont := true;
-  for i := 0 to GetCount - 1 do
+  if not assigned(fnCallBack) then exit;
+  IsContinue := true;
+  for iCount := 0 to GetCount - 1 do
     begin
-      obj := ForEachElement(i, ws);
-      if assigned(obj) then cb(ws, obj, data, doCont);
-      if not doCont then break;
+      anJSON := ForEachElement(iCount, wsObject);
+      if assigned(anJSON) then
+        fnCallBack(wsObject, anJSON, pUserData, IsContinue);
+      if not IsContinue then break;
     end;
 end;
+
+///---- renamed to here
 
 function TlkJSONcustomlist.ForEachElement(idx: Integer; var nm:
   string): TlkJSONbase;
@@ -651,7 +825,7 @@ end;
 
 function TlkJSONcustomlist.getDouble(idx: Integer): Double;
 var
-  jn:TlkJSONnumber;
+  jn: TlkJSONnumber;
 begin
   jn := Child[idx] as TlkJSONnumber;
   if not assigned(jn) then result := 0
@@ -660,16 +834,16 @@ end;
 
 function TlkJSONcustomlist.getInt(idx: Integer): Integer;
 var
-  jn:TlkJSONnumber;
+  jn: TlkJSONnumber;
 begin
   jn := Child[idx] as TlkJSONnumber;
   if not assigned(jn) then result := 0
   else result := round(int(jn.Value));
 end;
 
-function TlkJSONcustomlist.getString(idx: Integer): String;
+function TlkJSONcustomlist.getString(idx: Integer): string;
 var
-  js:TlkJSONstring;
+  js: TlkJSONstring;
 begin
   js := Child[idx] as TlkJSONstring;
   if not assigned(js) then result := ''
@@ -678,7 +852,7 @@ end;
 
 function TlkJSONcustomlist.getWideString(idx: Integer): WideString;
 var
-  js:TlkJSONstring;
+  js: TlkJSONstring;
 begin
   js := Child[idx] as TlkJSONstring;
   if not assigned(js) then result := ''
@@ -687,7 +861,7 @@ end;
 
 function TlkJSONcustomlist.getBoolean(idx: Integer): Boolean;
 var
-  jb:TlkJSONboolean;
+  jb: TlkJSONboolean;
 begin
   jb := Child[idx] as TlkJSONboolean;
   if not assigned(jb) then result := false
@@ -786,7 +960,8 @@ end;
 
 { TlkJSONobject }
 
-function TlkJSONobject.Add(const aname: WideString; aobj: TlkJSONbase):
+function TlkJSONobject.Add(const aname: WideString; aobj:
+  TlkJSONbase):
   Integer;
 var
   mth: TlkJSONobjectmethod;
@@ -800,7 +975,12 @@ begin
   mth.FName := aname;
   mth.FValue := aobj;
   result := self._Add(mth);
-  if FUseHash then ht.AddPair(aname, result);
+  if FUseHash then
+{$IFDEF USE_HASH}
+    ht.AddPair(aname, result);
+{$ELSE}
+    ht.Insert(aname, result);
+{$ENDIF USE_HASH}
 end;
 
 procedure TlkJSONobject.Delete(idx: Integer);
@@ -816,7 +996,8 @@ begin
   _Delete(idx);
 end;
 
-class function TlkJSONobject.Generate(AUseHash: Boolean = true): TlkJSONobject;
+class function TlkJSONobject.Generate(AUseHash: Boolean = true):
+  TlkJSONobject;
 begin
   result := TlkJSONobject.Create(AUseHash);
 end;
@@ -897,7 +1078,8 @@ begin
     end;
 end;
 
-function TlkJSONobject.Add(const aname: WideString; nmb: double): Integer;
+function TlkJSONobject.Add(const aname: WideString; nmb: double):
+  Integer;
 begin
   Result := self.Add(aname, TlkJSONnumber.Generate(nmb));
 end;
@@ -908,7 +1090,8 @@ begin
   Result := self.Add(aname, TlkJSONboolean.Generate(bool));
 end;
 
-function TlkJSONobject.Add(const aname: WideString; s: string): Integer;
+function TlkJSONobject.Add(const aname: WideString; s: string):
+  Integer;
 begin
   Result := self.Add(aname, TlkJSONstring.Generate(s));
 end;
@@ -983,7 +1166,11 @@ begin
   result := GetFieldByIndex(idx);
 end;
 
+{$IFDEF USE_HASH}
 function TlkJSONobject.GetHashTable: TlkHashTable;
+{$ELSE}
+function TlkJSONobject.GetHashTable: TlkBalTree;
+{$ENDIF USE_HASH}
 begin
   result := ht;
 end;
@@ -992,7 +1179,11 @@ constructor TlkJSONobject.Create(bUseHash: Boolean);
 begin
   inherited Create;
   FUseHash := bUseHash;
+{$IFDEF USE_HASH}
   ht := TlkHashTable.Create;
+{$ELSE}
+  ht := TlkBalTree.Create;
+{$ENDIF}
 end;
 
 destructor TlkJSONobject.Destroy;
@@ -1003,7 +1194,7 @@ end;
 
 function TlkJSONobject.getDouble(idx: Integer): Double;
 var
-  jn:TlkJSONnumber;
+  jn: TlkJSONnumber;
 begin
   jn := FieldByIndex[idx] as TlkJSONnumber;
   if not assigned(jn) then result := 0
@@ -1012,16 +1203,16 @@ end;
 
 function TlkJSONobject.getInt(idx: Integer): Integer;
 var
-  jn:TlkJSONnumber;
+  jn: TlkJSONnumber;
 begin
   jn := FieldByIndex[idx] as TlkJSONnumber;
   if not assigned(jn) then result := 0
   else result := round(int(jn.Value));
 end;
 
-function TlkJSONobject.getString(idx: Integer): String;
+function TlkJSONobject.getString(idx: Integer): string;
 var
-  js:TlkJSONstring;
+  js: TlkJSONstring;
 begin
   js := FieldByIndex[idx] as TlkJSONstring;
   if not assigned(js) then result := ''
@@ -1030,43 +1221,43 @@ end;
 
 function TlkJSONobject.getWideString(idx: Integer): WideString;
 var
-  js:TlkJSONstring;
+  js: TlkJSONstring;
 begin
   js := FieldByIndex[idx] as TlkJSONstring;
   if not assigned(js) then result := ''
   else result := VarToWideStr(js.Value);
 end;
 
-function TlkJSONobject.getDouble(nm: String): Double;
+function TlkJSONobject.getDouble(nm: string): Double;
 begin
   result := getDouble(IndexOfName(nm));
 end;
 
-function TlkJSONobject.getInt(nm: String): Integer;
+function TlkJSONobject.getInt(nm: string): Integer;
 begin
   result := getInt(IndexOfName(nm));
 end;
 
-function TlkJSONobject.getString(nm: String): String;
+function TlkJSONobject.getString(nm: string): string;
 begin
   result := getString(IndexOfName(nm));
 end;
 
-function TlkJSONobject.getWideString(nm: String): WideString;
+function TlkJSONobject.getWideString(nm: string): WideString;
 begin
   result := getWideString(IndexOfName(nm));
 end;
 
 function TlkJSONobject.getBoolean(idx: Integer): Boolean;
 var
-  jb:TlkJSONboolean;
+  jb: TlkJSONboolean;
 begin
   jb := FieldByIndex[idx] as TlkJSONboolean;
   if not assigned(jb) then result := false
   else result := jb.Value;
 end;
 
-function TlkJSONobject.getBoolean(nm: String): Boolean;
+function TlkJSONobject.getBoolean(nm: string): Boolean;
 begin
   result := getBoolean(IndexOfName(nm));
 end;
@@ -1078,10 +1269,11 @@ var
 {$IFDEF HAVE_FORMATSETTING}
   fs: TFormatSettings;
 {$ENDIF}
-  pt1,pt0,pt2:PAnsiChar;
-  ptsz:cardinal;
+  pt1, pt0, pt2: PAnsiChar;
+  ptsz: cardinal;
 
-{$ifndef NEW_STYLE_GENERATE}
+{$IFNDEF NEW_STYLE_GENERATE}
+
   function gn_base(obj: TlkJSONbase): string;
   var
     ws: string;
@@ -1092,14 +1284,14 @@ var
     if not assigned(obj) then exit;
     if obj is TlkJSONnumber then
       begin
-{$ifdef HAVE_FORMATSETTING}
+{$IFDEF HAVE_FORMATSETTING}
         result := FloatToStr(TlkJSONnumber(obj).FValue, fs);
-{$else}
+{$ELSE}
         result := FloatToStr(TlkJSONnumber(obj).FValue);
         i := pos(DecimalSeparator, result);
         if (DecimalSeparator <> '.') and (i > 0) then
           result[i] := '.';
-{$endif}
+{$ENDIF}
       end
     else if obj is TlkJSONstring then
       begin
@@ -1171,9 +1363,11 @@ var
         result := result + '}';
       end;
   end;
-{$else}
+{$ELSE}
+
   procedure get_more_memory;
-  var delta: Integer;
+  var
+    delta: Integer;
   begin
     delta := 20000;
     if pt0 = nil then
@@ -1184,22 +1378,23 @@ var
       end
     else
       begin
-        ReallocMem(pt0,ptsz+delta);
-        pt1 := pointer(cardinal(pt0)+ptsz);
+        ReallocMem(pt0, ptsz + delta);
+        pt1 := pointer(cardinal(pt0) + ptsz);
       end;
     ptsz := ptsz + delta;
-    pt2 := pointer(cardinal(pt1)+delta);
+    pt2 := pointer(cardinal(pt1) + delta);
   end;
 
-  procedure mem_ch(ch:char);
+  procedure mem_ch(ch: char);
   begin
     if pt1 >= pt2 then get_more_memory;
     pt1^ := ch;
     inc(pt1);
   end;
 
-  procedure mem_write(rs: String);
-  var i: Integer;
+  procedure mem_write(rs: string);
+  var
+    i: Integer;
   begin
     for i := 1 to length(rs) do
       begin
@@ -1218,14 +1413,14 @@ var
     if not assigned(obj) then exit;
     if obj is TlkJSONnumber then
       begin
-{$ifdef HAVE_FORMATSETTING}
+{$IFDEF HAVE_FORMATSETTING}
         mem_write(FloatToStr(TlkJSONnumber(obj).FValue, fs));
-{$else}
+{$ELSE}
         ws := FloatToStr(TlkJSONnumber(obj).FValue);
         i := pos(DecimalSeparator, ws);
         if (DecimalSeparator <> '.') and (i > 0) then ws[i] := '.';
         mem_write(ws);
-{$endif}
+{$ENDIF}
       end
     else if obj is TlkJSONstring then
       begin
@@ -1295,46 +1490,50 @@ var
         j := TlkJSONobject(obj).Count - 1;
         for i := 0 to j do
           begin
-            if i>0 then mem_ch(',');
+            if i > 0 then mem_ch(',');
             gn_base(TlkJSONobject(obj).Child[i]);
           end;
         mem_ch('}');
       end;
   end;
-{$endif NEW_STYLE_GENERATE}
+{$ENDIF NEW_STYLE_GENERATE}
 
 begin
-{$ifdef HAVE_FORMATSETTING}
+{$IFDEF HAVE_FORMATSETTING}
   GetLocaleFormatSettings(GetThreadLocale, fs);
   fs.DecimalSeparator := '.';
-{$endif}
-{$ifdef NEW_STYLE_GENERATE}
+{$ENDIF}
+{$IFDEF NEW_STYLE_GENERATE}
   pt0 := nil;
   get_more_memory;
   gn_base(obj);
   mem_ch(#0);
   result := string(pt0);
   freemem(pt0);
-{$else}
+{$ELSE}
   result := gn_base(obj);
-{$endif}
+{$ENDIF}
 end;
 
 class function TlkJSON.ParseText(const txt: string): TlkJSONbase;
-{$ifdef HAVE_FORMATSETTING}
+{$IFDEF HAVE_FORMATSETTING}
 var
   fs: TFormatSettings;
-{$endif}
+{$ENDIF}
 
   function js_base(idx: Integer; var ridx: Integer; var o:
     TlkJSONbase): Boolean; forward;
 
-  function xe(idx: Integer): Boolean;{$IFDEF FPC}inline;{$ENDIF}
+  function xe(idx: Integer): Boolean;
+  {$IFDEF FPC}inline;
+  {$ENDIF}
   begin
     result := idx <= length(txt);
   end;
 
-  procedure skip_spc(var idx: Integer);{$IFDEF FPC}inline;{$ENDIF}
+  procedure skip_spc(var idx: Integer);
+  {$IFDEF FPC}inline;
+  {$ENDIF}
   begin
     while (xe(idx)) and (ord(txt[idx]) < 33) do
       inc(idx);
@@ -1362,7 +1561,11 @@ var
           begin
             i := TlkJSONobject(o)._Add(c);
             if TlkJSONobject(o).UseHash then
+{$IFDEF USE_HASH}
               TlkJSONobject(o).ht.AddPair(TlkJSONobjectmethod(c).Name, i);
+{$ELSE}
+              TlkJSONobject(o).ht.Insert(TlkJSONobjectmethod(c).Name, i);
+{$ENDIF USE_HASH}
           end;
       end;
   end;
@@ -1430,9 +1633,9 @@ var
   var
     js: TlkJSONnumber;
     ws: string;
-{$IFNDEF HAVE_FORMATSETTING}
+  {$IFNDEF HAVE_FORMATSETTING}
     i: Integer;
-{$ENDIF}
+  {$ENDIF}
   begin
     skip_spc(idx);
     result := xe(idx);
@@ -1509,7 +1712,8 @@ var
                   begin
 //                    ws := ws + widechar(strtoint('$' +
 //                      copy(txt, idx + 1, 4)));
-                    ws := ws + code2utf(strtoint('$' + copy(txt, idx + 1, 4)));
+                    ws := ws + code2utf(strtoint('$' + copy(txt, idx
+                      + 1, 4)));
                     idx := idx + 4;
                   end;
               end;
@@ -1654,10 +1858,10 @@ var
 var
   idx: Integer;
 begin
-{$ifdef HAVE_FORMATSETTING}
+{$IFDEF HAVE_FORMATSETTING}
   GetLocaleFormatSettings(GetThreadLocale, fs);
   fs.DecimalSeparator := '.';
-{$endif}
+{$ENDIF}
 
   result := nil;
   if txt = '' then exit;
@@ -1679,10 +1883,11 @@ end;
 
 { TlkHashTable }
 
+{$IFDEF USE_HASH}
 procedure TlkHashTable.AddPair(const ws: WideString; idx: Integer);
 var
   i, j, k: cardinal;
-  p,p2: PlkHashItem;
+  p, p2: PlkHashItem;
 begin
   if InTable(ws, i, j, k) then
     begin
@@ -1703,14 +1908,14 @@ begin
 //          dec(k);
 //        end;
 //--- new version
-      GetMem(p,sizeof(TlkHashItem));
+      GetMem(p, sizeof(TlkHashItem));
       k := a_x[j].Add(p);
       p^.hash := i;
       p^.index := idx;
-      while (k>0) and (PlkHashItem(a_x[j].Items[k])^.hash <
-        PlkHashItem(a_x[j].Items[k-1])^.hash) do
+      while (k > 0) and (PlkHashItem(a_x[j].Items[k])^.hash <
+        PlkHashItem(a_x[j].Items[k - 1])^.hash) do
         begin
-          a_x[j].Exchange(k,k-1);
+          a_x[j].Exchange(k, k - 1);
           dec(k);
         end;
     end;
@@ -1752,16 +1957,27 @@ end;
 {$IFDEF THREADSAFE}
 const
   rnd_table: array[0..255] of byte =
-(216,191,234,201,12,163,190,205,128,199,210,17,52,43,38,149,40,207,186,89,92,179,142,93,208,215,162,
-161,132,59,246,37,120,223,138,233,172,195,94,237,32,231,114,49,212,75,198,181,200,239,90,121,252,211,
-46,125,112,247,66,193,36,91,150,69,24,255,42,9,76,227,254,13,192,7,18,81,116,107,102,213,104,15,250,
-153,156,243,206,157,16,23,226,225,196,123,54,101,184,31,202,41,236,3,158,45,96,39,178,113,20,139,6,
-245,8,47,154,185,60,19,110,189,176,55,130,1,100,155,214,133,88,63,106,73,140,35,62,77,0,71,82,145,180,
-171,166,21,168,79,58,217,220,51,14,221,80,87,34,33,4,187,118,165,248,95,10,105,44,67,222,109,160,103,
-242,177,84,203,70,53,72,111,218,249,124,83,174,253,240,119,194,65,164,219,22,197,152,127,170,137,204,
-99,126,141,64,135,146,209,244,235,230,85,232,143,122,25,28,115,78,29,144,151,98,97,68,251,182,229,56,
-159,74,169,108,131,30,173,224,167,50,241,148,11,134,117,136,175,26,57,188,147,238,61,48,183,2,129,
-228,27,86,5);
+  (216, 191, 234, 201, 12, 163, 190, 205, 128, 199, 210, 17, 52, 43,
+    38, 149, 40, 207, 186, 89, 92, 179, 142, 93, 208, 215, 162,
+    161, 132, 59, 246, 37, 120, 223, 138, 233, 172, 195, 94, 237, 32,
+    231, 114, 49, 212, 75, 198, 181, 200, 239, 90, 121, 252, 211,
+    46, 125, 112, 247, 66, 193, 36, 91, 150, 69, 24, 255, 42, 9, 76,
+    227, 254, 13, 192, 7, 18, 81, 116, 107, 102, 213, 104, 15, 250,
+    153, 156, 243, 206, 157, 16, 23, 226, 225, 196, 123, 54, 101,
+    184, 31, 202, 41, 236, 3, 158, 45, 96, 39, 178, 113, 20, 139, 6,
+    245, 8, 47, 154, 185, 60, 19, 110, 189, 176, 55, 130, 1, 100,
+    155, 214, 133, 88, 63, 106, 73, 140, 35, 62, 77, 0, 71, 82, 145,
+    180,
+    171, 166, 21, 168, 79, 58, 217, 220, 51, 14, 221, 80, 87, 34, 33,
+    4, 187, 118, 165, 248, 95, 10, 105, 44, 67, 222, 109, 160, 103,
+    242, 177, 84, 203, 70, 53, 72, 111, 218, 249, 124, 83, 174, 253,
+    240, 119, 194, 65, 164, 219, 22, 197, 152, 127, 170, 137, 204,
+    99, 126, 141, 64, 135, 146, 209, 244, 235, 230, 85, 232, 143,
+    122, 25, 28, 115, 78, 29, 144, 151, 98, 97, 68, 251, 182, 229,
+    56,
+    159, 74, 169, 108, 131, 30, 173, 224, 167, 50, 241, 148, 11, 134,
+    117, 136, 175, 26, 57, 188, 147, 238, 61, 48, 183, 2, 129,
+    228, 27, 86, 5);
 {$ELSE}
 var
   rnd_table: array[0..255] of byte;
@@ -1798,14 +2014,14 @@ begin
   x2 := 1;
   p := PWideChar(ws);
   while p^ <> #0 do
-  begin
-    inc(x1, ord(p^)) {and $FF};
-    inc(x2, 1 + (ord(p^) shr 8)) {and $FF};
-    x3 := rnd_table[x1];
-    x4 := rnd_table[x3];
-    result := ((x1 * x4) + (x2 * x3)) xor result;
-    inc(p);
-  end;
+    begin
+      inc(x1, ord(p^)) {and $FF};
+      inc(x2, 1 + (ord(p^) shr 8)) {and $FF};
+      x3 := rnd_table[x1];
+      x4 := rnd_table[x3];
+      result := ((x1 * x4) + (x2 * x3)) xor result;
+      inc(p);
+    end;
 end;
 {$ENDIF}
 
@@ -1816,7 +2032,7 @@ begin
 //  h := a_h[j, k];
 //  a_h[j, k] := a_h[j, l];
 //  a_h[j, l] := h;
-  a_x[j].Exchange(k,l);
+  a_x[j].Exchange(k, l);
 end;
 
 function TlkHashTable.IndexOf(const ws: WideString): Integer;
@@ -1834,7 +2050,8 @@ begin
     end;
 end;
 
-function TlkHashTable.InTable(const ws: WideString; var i, j, k: cardinal):
+function TlkHashTable.InTable(const ws: WideString; var i, j, k:
+  cardinal):
   Boolean;
 var
   l, wu, wl: Integer;
@@ -1855,7 +2072,7 @@ begin
 //            result := true;
 //            break;
 //          end;
-      for l := 0 to a_x[j].Count-1 do
+      for l := 0 to a_x[j].Count - 1 do
         if PlkHashItem(a_x[j].Items[l])^.hash = i then
           begin
             k := l;
@@ -1869,7 +2086,7 @@ begin
 //      wl := low(a_h[j]);
 //      wu := high(a_h[j]);
       wl := 0;
-      wu := a_x[j].Count-1;
+      wu := a_x[j].Count - 1;
       repeat
         fin := true;
         if PlkHashItem(a_x[j].Items[wl])^.hash = i then
@@ -1898,8 +2115,8 @@ begin
       until fin;
     end;
 end;
+{$IFNDEF THREADSAFE}
 
-{$ifndef THREADSAFE}
 procedure init_rnd;
 var
   x0: Integer;
@@ -1912,9 +2129,10 @@ begin
       rnd_table[i] := x0;
     end;
 end;
-{$endif}
+{$ENDIF}
 
-procedure TlkHashTable.SetHashFunction(const AValue: TlkHashFunction);
+procedure TlkHashTable.SetHashFunction(const AValue:
+  TlkHashFunction);
 begin
   FHashFunction := AValue;
 end;
@@ -1931,12 +2149,12 @@ end;
 
 destructor TlkHashTable.Destroy;
 var
-  i,j: Integer;
+  i, j: Integer;
 begin
 //  for i := 0 to 255 do SetLength(a_h[i], 0);
   for i := 0 to 255 do
     begin
-      for j := 0 to a_x[i].Count-1 do Freemem(a_x[i].Items[j]);
+      for j := 0 to a_x[i].Count - 1 do Freemem(a_x[i].Items[j]);
       a_x[i].Free;
     end;
   inherited;
@@ -1949,6 +2167,7 @@ begin
   result := length(ws);
   for i := 1 to length(ws) do result := result + ord(ws[i]);
 end;
+{$ENDIF USE_HASH}
 
 { TlkJSONstreamed }
 {$IFNDEF KOL}
@@ -2034,12 +2253,168 @@ begin
   BeforeDestruction;
   inherited;
 end;
-
 {$ENDIF DOTNET}
 
-{$ifndef THREADSAFE}
+{ TlkBalTree }
+
+{$IFNDEF USE_HASH}
+procedure TlkBalTree.Clear;
+
+  procedure rec(t: PlkBalNode);
+  begin
+    if t.left<>fbottom then rec(t.left);
+    if t.right<>fbottom then rec(t.right);
+    t.nm := '';
+    dispose(t);
+  end;
+
+begin
+  if froot<>fbottom then rec(froot);
+  froot := fbottom;
+  fdeleted := fbottom;
+end;
+
+function TlkBalTree.counters: string;
+begin
+  result := format('Balanced tree root node level is %d',[froot.level]);
+end;
+
+constructor TlkBalTree.Create;
+begin
+  inherited Create;
+  new(fbottom);
+  fbottom.left := fbottom;
+  fbottom.right := fbottom;
+  fbottom.level := 0;
+  fdeleted := fbottom;
+  froot := fbottom;
+end;
+
+function TlkBalTree.Delete(const ws: WideString): Boolean;
+
+  function del(var t: PlkBalNode): Boolean;
+  begin
+    result := false;
+    if t<>fbottom then
+      begin
+        flast := t;
+        if ws<t.nm then
+          result := del(t.left)
+        else
+          begin
+            fdeleted := t;
+            result := del(t.right);
+          end;
+        if (t = flast) and (fdeleted<>fbottom) and (ws = t.nm) then
+          begin
+            fdeleted.key := t.key;
+            fdeleted.nm := t.nm;
+            t := t.right;
+            flast.nm := '';
+            dispose(flast);
+            result := true;
+          end
+        else if (t.left.level<(t.level-1)) or (t.right.level<(t.level-1)) then
+          begin
+            t.level := t.level-1;
+            if t.right.level>t.level then t.right.level := t.level;
+            skew(t);
+            skew(t.right);
+            skew(t.right.right);
+            split(t);
+            split(t.right);
+          end;
+      end;
+  end;
+
+begin
+  result := del(froot);
+end;
+
+destructor TlkBalTree.Destroy;
+begin
+  Clear;
+  dispose(fbottom);
+  inherited;
+end;
+
+function TlkBalTree.IndexOf(const ws: WideString): Integer;
+var
+  tk: PlkBalNode;
+begin
+  result := -1;
+  tk := froot;
+  while (result=-1) and (tk<>fbottom) do
+    begin
+      if tk.nm = ws then result := tk.key
+      else if ws<tk.nm then tk := tk.left
+      else tk := tk.right;
+    end;
+end;
+
+function TlkBalTree.Insert(const ws: WideString; x: Integer): Boolean;
+
+  function ins(var t: PlkBalNode): Boolean;
+  begin
+    if t = fbottom then
+      begin
+        new(t);
+        t.key := x;
+        t.nm := ws;
+        t.left := fbottom;
+        t.right := fbottom;
+        t.level := 1;
+        result := true;
+      end
+    else
+      begin
+        if ws < t.nm then
+          result := ins(t.left)
+        else if ws > t.nm then
+          result := ins(t.right)
+        else result := false;
+        skew(t);
+        split(t);
+      end;
+  end;
+
+begin
+  result := ins(froot);
+end;
+
+procedure TlkBalTree.skew(var t: PlkBalNode);
+var
+  temp: PlkBalNode;
+begin
+  if t.left.level = t.level then
+    begin
+      temp := t;
+      t := t.left;
+      temp.left := t.right;
+      t.right := temp;
+    end;
+end;
+
+procedure TlkBalTree.split(var t: PlkBalNode);
+var
+  temp: PlkBalNode;
+begin
+  if t.right.right.level = t.level then
+    begin
+      temp := t;
+      t := t.right;
+      temp.right := t.left;
+      t.left := temp;
+      t.level := t.level+1;
+    end;
+end;
+{$ENDIF USE_HASH}
+
 initialization
+{$IFNDEF THREADSAFE}
+{$IFDEF USE_HASH}
   init_rnd;
-{$ENDIF}
+{$ENDIF USE_HASH}
+{$ENDIF THREADSAFE}
 end.
 
