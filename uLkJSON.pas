@@ -1,7 +1,7 @@
 {
-  LkJSON v1.01
+  LkJSON v1.02
 
-  18 may 2007
+  14 september 2007
 
   Copyright (C) 2006,2007 Leonid Koninin
   leon_kon@users.sourceforge.net
@@ -22,6 +22,8 @@
 
   changes:
 
+  v1.02 14/09/2007 * fix mistypes in diffrent places; thanx for reports
+                     to Aleksandr Fedorov and Tobias Wrede
   v1.01 18/05/2007 * fix small bug in new text generation routine, check
                      library for leaks by fastmm4; thanx for idea and comments
                      for Glynn Owen
@@ -458,7 +460,7 @@ end;
 
 procedure TlkJSONnumber.SetValue(const AValue: Variant);
 begin
-  FValue := VarAsType(Value, varDouble);
+  FValue := VarAsType(AValue, varDouble);
 end;
 
 { TlkJSONstring }
@@ -492,7 +494,7 @@ end;
 
 procedure TlkJSONstring.SetValue(const AValue: Variant);
 begin
-  FValue := VarToWideStr(Value);
+  FValue := VarToWideStr(AValue);
 end;
 
 { TlkJSONboolean }
@@ -525,7 +527,7 @@ end;
 
 procedure TlkJSONboolean.SetValue(const AValue: Variant);
 begin
-  FValue := boolean(Value);
+  FValue := boolean(AValue);
 end;
 
 { TlkJSONnull }
